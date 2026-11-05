@@ -93,7 +93,7 @@ export default function App() {
   const gridStatus = useMemo(() => {
     const v = Number(liveData?.grid_voltage || 0);
     const f = Number(liveData?.grid_frequency || 0);
-    if (!v) return { label: 'Grid Offline', hint: 'No AC reference detected', tone: 'danger' };
+    if (!v) return { label: 'Inverter Asleep (Night)', hint: 'Zero DC solar generation, AC relay open', tone: 'neutral' };
     if (v >= 207 && v <= 253 && f >= 49.5 && f <= 50.5) {
       return {
         label: 'APDCL Grid Synced',
@@ -152,24 +152,26 @@ export default function App() {
             <div
               className={`status-pill ${connStatus}`}
               title={
-                connStatus === 'live_ws'
-                  ? 'Streaming 1 Hz push frames over WebSocket'
-                  : connStatus === 'polling_fallback'
-                  ? 'WebSocket unavailable — polling REST endpoint every 1.5s'
-                  : 'Attempting to re-establish link to FastAPI gateway'
+                liveData?.status === 'Inverter Asleep / Offline' || Number(liveData?.grid_voltage || 0) === 0
+                  ? 'Inverter is in night standby / offline mode'
+                  : connStatus === 'live_ws'
+                  ? 'Streaming live frames over WebSocket'
+                  : 'Polling REST gateway'
               }
             >
               <span className="dot"></span>
               <div className="status-pill-text">
                 <span className="status-primary">
-                  {connStatus === 'live_ws'
-                    ? '1 Hz WebSocket Live'
+                  {liveData?.status === 'Inverter Asleep / Offline' || Number(liveData?.grid_voltage || 0) === 0
+                    ? 'Inverter Asleep (Night)'
+                    : connStatus === 'live_ws'
+                    ? '1 Hz Stream Live'
                     : connStatus === 'polling_fallback'
-                    ? 'HTTP Fallback (1.5s)'
+                    ? 'HTTP Connected'
                     : 'Reconnecting...'}
                 </span>
                 <span className="status-sub">
-                  {isSimulation ? 'Simulated Physics Engine' : `RS485 (${config?.selected_com_port || config?.modbus_port || 'COM Port'})`}
+                  {liveData?.source || (isSimulation ? 'Simulation Mode' : 'Hardware Direct')}
                 </span>
               </div>
             </div>
@@ -184,25 +186,6 @@ export default function App() {
             </button>
           </div>
         </header>
-
-        {/* Unmistakable Hardware vs. Simulation Context Banner (F-04) */}
-        {isSimulation && (
-          <section className="data-source-banner warning" role="status" aria-live="polite">
-            <div className="banner-content">
-              <span className="banner-badge">SIMULATION FALLBACK</span>
-              <p className="banner-text">
-                <strong>Hardware RS485 Telemetry Inactive:</strong> Showing synthetic solar & household load values ({liveData?.source || 'No USB-RS485 response'}). Household load and grid import/export require an external bidirectional CT meter or active COM port link.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="banner-action-btn"
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              Select RS485 Port
-            </button>
-          </section>
-        )}
 
         {/* Descriptive 4-Card Hero KPI Strip (F-04) */}
         <section className="kpi-hero-strip" aria-label="Key System Telemetry Summary">
@@ -257,7 +240,11 @@ export default function App() {
               <span className="kpi-secondary">@ {Number(liveData?.grid_frequency || 0).toFixed(2)} Hz</span>
             </div>
             <p className="kpi-description">
-              Exporting <strong>{Number(liveData?.grid_current || 0).toFixed(1)} A</strong> to single-phase feeder. {gridStatus.hint}.
+              {Number(liveData?.grid_voltage || 0) > 0 ? (
+                <>Exporting <strong>{Number(liveData?.grid_current || 0).toFixed(1)} A</strong> to single-phase feeder. {gridStatus.hint}.</>
+              ) : (
+                <>Inverter contactors open. No AC injection during night sleep mode.</>
+              )}
             </p>
           </article>
 

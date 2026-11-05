@@ -137,7 +137,7 @@ def init_db():
         "inverter_model": "Havells Enviro Pro GTi",
         "inverter_sn": "AFDOALB2PNAPJ78",
         "rated_capacity_w": "3300",            # 3.3 kW system
-        "simulation_mode": "true",
+        "simulation_mode": "false",            # Honest zero state when hardware offline
         "selected_com_port": "",
         "baud_rate": "9600",
         "slave_id": "1"

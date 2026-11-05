@@ -103,7 +103,7 @@ app = FastAPI(title="Havells Solar Monitor - APDCL", version="3.0.0", lifespan=l
 @app.get("/api/telemetry/latest")
 async def get_status():
     """Returns the latest live snapshot"""
-    return inverter_hub.latest_data or inverter_hub.simulator.get_reading()
+    return inverter_hub.latest_data or inverter_hub.get_offline_reading()
 
 @app.get("/api/history/today")
 @app.get("/api/telemetry/today-curve")

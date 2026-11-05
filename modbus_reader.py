@@ -339,8 +339,53 @@ class InverterManager:
                 self.modbus_client = ModbusRTUClient(port=com_port, baudrate=baud)
                 self.modbus_client.connect()
 
+    def get_offline_reading(self) -> dict:
+        """Returns an honest zero-state reading when the physical inverter is asleep or disconnected."""
+        now = datetime.now()
+        summary = database.get_overall_summary()
+        today_kwh = summary.get("today_kwh", 0.0)
+        lifetime_kwh = summary.get("lifetime_kwh", 0.0)
+
+        return {
+            "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "active_power": 0.0,
+            "reactive_power": 0.0,
+            "apparent_power": 0.0,
+            "power_factor": 0.0,
+            "inverter_efficiency": 0.0,
+            "total_dc_power": 0.0,
+            "pv1_voltage": 0.0,
+            "pv1_current": 0.0,
+            "pv1_power": 0.0,
+            "pv2_voltage": 0.0,
+            "pv2_current": 0.0,
+            "pv2_power": 0.0,
+            "pv1_insulation": 0.0,
+            "pv2_insulation": 0.0,
+            "pv_n_insulation": 0.0,
+            "gfci_leakage": 0.0,
+            "dci_injection": 0.0,
+            "grid_voltage": 0.0,
+            "grid_current": 0.0,
+            "grid_frequency": 0.0,
+            "home_load": 0.0,
+            "grid_import": 0.0,
+            "grid_export": 0.0,
+            "today_energy": today_kwh,
+            "total_energy": lifetime_kwh,
+            "today_runtime_hrs": 0.0,
+            "total_runtime_hrs": 0.0,
+            "module_temp": 0.0,
+            "inner_temp": 0.0,
+            "bus_voltage": 0.0,
+            "status": "Inverter Asleep / Offline",
+            "source": "Offline (Awaiting Hardware Link)",
+            "is_simulation": False,
+            "is_load_estimated": False
+        }
+
     def _poll_loop(self):
-        sim_pref = database.get_config_value("simulation_mode", "true") == "true"
+        sim_pref = database.get_config_value("simulation_mode", "false") == "true"
         saved_port = database.get_config_value("selected_com_port", "")
         self.set_mode(sim_pref, saved_port)
 
@@ -358,15 +403,16 @@ class InverterManager:
                         reading = self._parse_registers(regs)
                         reading["source"] = f"Hardware ({self.active_com_port})"
                         reading["is_simulation"] = False
-                        reading["is_load_estimated"] = True
+                        reading["is_load_estimated"] = False
                     except Exception as e:
-                        # Fallback to simulation if hardware poll fails
-                        reading = self.simulator.get_reading()
-                        reading["source"] = f"Sim (HW Error: {str(e)[:25]})"
-                        reading["is_simulation"] = True
-                        reading["is_load_estimated"] = True
+                        # Fallback when hardware poll fails: honest zero offline state
+                        reading = self.get_offline_reading()
+                        reading["source"] = f"Hardware Offline ({str(e)[:25]})"
                 else:
-                    reading = self.simulator.get_reading()
+                    if self.force_simulation:
+                        reading = self.simulator.get_reading()
+                    else:
+                        reading = self.get_offline_reading()
 
             self.latest_data = reading
 
