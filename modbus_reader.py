@@ -12,11 +12,50 @@ from datetime import datetime
 import serial
 import serial.tools.list_ports
 
-from modbus_registers import *
+from modbus_registers import (
+    TWO_DEC_UNIT,
+    ONE_DEC_UNIT,
+    NO_DEC_UNIT,
+    MULTIPLY_TEN_UNIT,
+    HAVELLS_PV_1_VOLTAGE,
+    HAVELLS_PV_1_CURRENT,
+    HAVELLS_PV_2_VOLTAGE,
+    HAVELLS_PV_2_CURRENT,
+    HAVELLS_PV_1_POWER,
+    HAVELLS_PV_2_POWER,
+    HAVELLS_SYSTEM_ACTIVE_POWER,
+    HAVELLS_SYSTEM_REACTIVE_POWER,
+    HAVELLS_GRID_FREQUENCY,
+    HAVELLS_PHASE_1_VOLTAGE,
+    HAVELLS_PHASE_1_CURRENT,
+    HAVELLS_PHASE_2_VOLTAGE,
+    HAVELLS_PHASE_2_CURRENT,
+    HAVELLS_PHASE_3_VOLTAGE,
+    HAVELLS_PHASE_3_CURRENT,
+    HAVELLS_TOTAL_ENERGY_PRODUCTION,
+    HAVELLS_TOTAL_GENERATION_TIME,
+    HAVELLS_TODAY_PRODUCTION,
+    HAVELLS_TODAY_GENERATION_TIME,
+    HAVELLS_INVERTER_MODULE_TEMP,
+    HAVELLS_INVERTER_INNER_TEMP,
+    HAVELLS_INVERTER_BUS_VOLTAGE,
+    HAVELLS_PV1_VOLTAGE_SECONDARY,
+    HAVELLS_PV2_VOLTAGE_SECONDARY,
+    HAVELLS_PV1_INSULATION_P_TO_GND,
+    HAVELLS_PV2_INSULATION_P_TO_GND,
+    HAVELLS_INSULATION_PV_N_TO_GND,
+    HAVELLS_GFCI_VALUE,
+    HAVELLS_DCI_OF_R,
+    HAVELLS_DCI_OF_S,
+    HAVELLS_DCI_OF_T,
+    TOTAL_REGISTER_COUNT,
+    to_signed_16,
+    combine_u32
+)
 import database
 
 def calculate_modbus_crc(data: bytes) -> bytes:
-    """Calculates 16-bit Modbus CRC"""
+    """Calculates 16-bit Modbus RTU CRC."""
     crc = 0xFFFF
     for pos in data:
         crc ^= pos
@@ -48,7 +87,7 @@ def compute_household_flow(active_power: float) -> tuple:
     else:
         base = 420.0
         
-    noise = random.uniform(-25.0, 25.0)
+    noise = random.uniform(-20.0, 20.0)
     home_load = round(max(250.0, base + noise), 1)
     
     if active_power >= home_load:
@@ -86,8 +125,12 @@ class ModbusRTUClient:
             return False
 
     def close(self):
-        if self.ser and self.ser.is_open:
-            self.ser.close()
+        try:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+        except Exception:
+            pass
+        finally:
             self.ser = None
 
     def read_holding_registers(self, slave_id: int = 1, start_reg: int = 0, count: int = 48) -> list:
@@ -122,7 +165,7 @@ class ModbusRTUClient:
 class SolarZenithSimulator:
     """
     Simulates authentic daytime solar irradiance curve matching Havells 3.3kW inverter.
-    Generates realistic dynamic variations (cloud flutter, inverter thermal dynamics, grid wobble).
+    Accurately clamps all solar metrics to strict 0.0 at night (elevation <= 0) without positive noise.
     """
     def __init__(self):
         self.cumulative_kwh_today = 14.85
@@ -135,17 +178,16 @@ class SolarZenithSimulator:
         dt = time.time() - self.last_update
         self.last_update = time.time()
 
-        # Solar zenith model: active between 6:00 (6.0) and 18:30 (18.5)
-        sunrise = 6.0
-        sunset = 18.5
-        solar_noon = 12.5
+        # Solar zenith model: daylight between 05:45 (5.75) and 18:15 (18.25)
+        sunrise = 5.75
+        sunset = 18.25
 
-        if sunrise <= hour <= sunset:
+        if sunrise < hour < sunset:
             # Normalized solar elevation (half-sine peak)
             elevation = math.sin((hour - sunrise) / (sunset - sunrise) * math.pi)
             elevation = max(0.0, elevation)
             
-            # Peak power around 3250 W (user's Havells displayed 3120 W during afternoon)
+            # Peak power around 3250 W
             peak_rated = 3250.0
             theoretical_power = peak_rated * (elevation ** 1.15)
             
@@ -168,24 +210,25 @@ class SolarZenithSimulator:
             inner_temp = round(34.0 + (elevation * 12.0) + random.uniform(-0.3, 0.3), 1)
             module_temp = round(38.0 + (elevation * 16.0) + random.uniform(-0.4, 0.4), 1)
             status = "Normal"
+            bus_voltage = round((pv1_voltage + pv2_voltage) * 0.65 + 340, 1)
         else:
-            # Night time / Standby
+            # Strict Nighttime Zero-Clamping (B-05) - NO positive Gaussian noise added
             active_power = 0.0
             pv1_power = 0.0
             pv2_power = 0.0
-            pv1_voltage = 12.0
-            pv2_voltage = 12.0
+            pv1_voltage = 0.0
+            pv2_voltage = 0.0
             pv1_current = 0.0
             pv2_current = 0.0
             inner_temp = 28.0
-            module_temp = 29.0
+            module_temp = 28.5
             status = "Standby"
+            bus_voltage = 0.0
 
-        # AC Grid side
+        # AC Grid side (grid voltage and frequency are active 24/7 as long as grid is live)
         grid_voltage = round(231.0 + random.uniform(-2.5, 2.5), 1)
         grid_current = round(active_power / grid_voltage, 2) if grid_voltage > 0 else 0.0
         grid_frequency = round(50.0 + random.uniform(-0.08, 0.08), 2)
-        bus_voltage = round((pv1_voltage + pv2_voltage) * 0.65 + 340, 1) if active_power > 0 else 30.0
 
         # Energy accumulation
         if active_power > 0 and dt > 0:
@@ -198,8 +241,8 @@ class SolarZenithSimulator:
         if active_power > 0:
             reactive_power = round(0.02 + random.uniform(-0.01, 0.02), 2)
             apparent_power = round(math.sqrt(active_power**2 + (reactive_power * 1000)**2), 1)
-            power_factor = round(min(1.0, active_power / apparent_power), 3)
-            inverter_efficiency = round(min(98.1, max(95.0, (active_power / total_dc_power) * 100)), 1)
+            power_factor = round(min(1.0, active_power / apparent_power), 3) if apparent_power > 0 else 1.0
+            inverter_efficiency = round(min(98.1, max(95.0, (active_power / total_dc_power) * 100)), 1) if total_dc_power > 0 else 0.0
             gfci_leakage = round(8.4 + random.uniform(-1.0, 1.2), 1)
             dci_injection = round(3.5 + random.uniform(-0.6, 0.7), 1)
         else:
@@ -254,11 +297,13 @@ class SolarZenithSimulator:
             "inner_temp": inner_temp,
             "bus_voltage": bus_voltage,
             "status": status,
-            "source": "Simulator"
+            "source": "Simulator",
+            "is_simulation": True,
+            "is_load_estimated": True
         }
 
 class InverterManager:
-    """Coordinates polling loop between physical Modbus hardware and Simulator"""
+    """Coordinates polling loop between physical Modbus hardware and Simulator with thread locking."""
     def __init__(self):
         self.simulator = SolarZenithSimulator()
         self.modbus_client = None
@@ -268,24 +313,31 @@ class InverterManager:
         self.listeners = []
         self.force_simulation = True
         self.active_com_port = ""
+        self._serial_lock = threading.Lock()
+        self.word_swap = False
 
     def start(self):
-        self.is_running = True
-        self.thread = threading.Thread(target=self._poll_loop, daemon=True)
-        self.thread.start()
+        if not self.is_running:
+            self.is_running = True
+            self.thread = threading.Thread(target=self._poll_loop, daemon=True)
+            self.thread.start()
 
     def set_mode(self, use_simulation: bool, com_port: str = ""):
-        self.force_simulation = use_simulation
-        self.active_com_port = com_port
-        database.set_config_value("simulation_mode", "true" if use_simulation else "false")
-        database.set_config_value("selected_com_port", com_port)
-        if not use_simulation and com_port:
-            self.modbus_client = ModbusRTUClient(port=com_port)
-            self.modbus_client.connect()
-        else:
+        with self._serial_lock:
+            self.force_simulation = use_simulation
+            self.active_com_port = com_port
+            database.set_config_value("simulation_mode", "true" if use_simulation else "false")
+            database.set_config_value("selected_com_port", com_port)
+            
+            # Explicitly close active serial port before opening new handle or entering simulation
             if self.modbus_client:
                 self.modbus_client.close()
                 self.modbus_client = None
+                
+            if not use_simulation and com_port:
+                baud = int(database.get_config_value("baud_rate", "9600"))
+                self.modbus_client = ModbusRTUClient(port=com_port, baudrate=baud)
+                self.modbus_client.connect()
 
     def _poll_loop(self):
         sim_pref = database.get_config_value("simulation_mode", "true") == "true"
@@ -296,18 +348,25 @@ class InverterManager:
 
         while self.is_running:
             reading = None
-            # Try reading real hardware if not forced to simulate
-            if not self.force_simulation and self.modbus_client and self.modbus_client.ser:
-                try:
-                    regs = self.modbus_client.read_holding_registers(slave_id=1, start_reg=0, count=48)
-                    reading = self._parse_registers(regs)
-                    reading["source"] = f"Hardware ({self.active_com_port})"
-                except Exception as e:
-                    # Fallback to simulation if hardware poll fails
+            
+            with self._serial_lock:
+                if not self.force_simulation and self.modbus_client and self.modbus_client.ser and self.modbus_client.ser.is_open:
+                    try:
+                        slave_id = int(database.get_config_value("slave_id", "1"))
+                        # Contiguous block read: 48 registers starting at 0x0000
+                        regs = self.modbus_client.read_holding_registers(slave_id=slave_id, start_reg=0, count=TOTAL_REGISTER_COUNT)
+                        reading = self._parse_registers(regs)
+                        reading["source"] = f"Hardware ({self.active_com_port})"
+                        reading["is_simulation"] = False
+                        reading["is_load_estimated"] = True
+                    except Exception as e:
+                        # Fallback to simulation if hardware poll fails
+                        reading = self.simulator.get_reading()
+                        reading["source"] = f"Sim (HW Error: {str(e)[:25]})"
+                        reading["is_simulation"] = True
+                        reading["is_load_estimated"] = True
+                else:
                     reading = self.simulator.get_reading()
-                    reading["source"] = f"Sim (HW Error: {str(e)[:25]})"
-            else:
-                reading = self.simulator.get_reading()
 
             self.latest_data = reading
 
@@ -327,7 +386,7 @@ class InverterManager:
             time.sleep(1.0)
 
     def _parse_registers(self, regs: list) -> dict:
-        """Decodes raw Modbus 16-bit register array into engineering units"""
+        """Decodes raw Modbus 16-bit register array into engineering units with two's complement and u32 combining."""
         now = datetime.now()
         pv1_v = round(regs[HAVELLS_PV_1_VOLTAGE] * ONE_DEC_UNIT, 1)
         pv1_i = round(regs[HAVELLS_PV_1_CURRENT] * TWO_DEC_UNIT, 2)
@@ -337,9 +396,9 @@ class InverterManager:
         pv2_p = round(regs[HAVELLS_PV_2_POWER] * MULTIPLY_TEN_UNIT, 1)
 
         active_power = round(regs[HAVELLS_SYSTEM_ACTIVE_POWER] * MULTIPLY_TEN_UNIT, 1)
-        raw_reactive = regs[HAVELLS_SYSTEM_REACTIVE_POWER]
-        if raw_reactive > 32767:
-            raw_reactive -= 65536
+        
+        # Signed 16-bit reactive power via two's complement
+        raw_reactive = to_signed_16(regs[HAVELLS_SYSTEM_REACTIVE_POWER])
         reactive_power = round(raw_reactive * TWO_DEC_UNIT, 2)
 
         grid_freq = round(regs[HAVELLS_GRID_FREQUENCY] * TWO_DEC_UNIT, 2)
@@ -352,16 +411,25 @@ class InverterManager:
         total_dc_p = round(pv1_p + pv2_p, 1)
         eff = round((active_power / total_dc_p) * 100, 1) if total_dc_p > 0 else 0.0
 
-        # 32-bit total energy (registers 0x15 and 0x16)
-        total_energy = (regs[HAVELLS_TOTAL_ENERGY_PRODUCTION] << 16) | regs[HAVELLS_TOTAL_ENERGY_PRODUCTION + 1]
+        # 32-bit total energy (registers 0x15 and 0x16) combining
+        total_energy = combine_u32(
+            regs[HAVELLS_TOTAL_ENERGY_PRODUCTION],
+            regs[HAVELLS_TOTAL_ENERGY_PRODUCTION + 1],
+            word_swap=self.word_swap
+        )
         today_energy = round(regs[HAVELLS_TODAY_PRODUCTION] * TWO_DEC_UNIT, 2)
 
-        total_runtime_hrs = (regs[HAVELLS_TOTAL_GENERATION_TIME] << 16) | regs[HAVELLS_TOTAL_GENERATION_TIME + 1]
+        total_runtime_hrs = combine_u32(
+            regs[HAVELLS_TOTAL_GENERATION_TIME],
+            regs[HAVELLS_TOTAL_GENERATION_TIME + 1],
+            word_swap=self.word_swap
+        )
         today_runtime_hrs = round(regs[HAVELLS_TODAY_GENERATION_TIME] * 0.1, 1)
 
-        module_temp = regs[HAVELLS_INVERTER_MODULE_TEMP]
-        inner_temp = regs[HAVELLS_INVERTER_INNER_TEMP]
-        bus_voltage = regs[HAVELLS_INVERTER_BUS_VOLTAGE]
+        # Signed 16-bit temperature registers via two's complement
+        module_temp = float(to_signed_16(regs[HAVELLS_INVERTER_MODULE_TEMP]))
+        inner_temp = float(to_signed_16(regs[HAVELLS_INVERTER_INNER_TEMP]))
+        bus_voltage = float(regs[HAVELLS_INVERTER_BUS_VOLTAGE])
 
         pv1_insulation = regs[HAVELLS_PV1_INSULATION_P_TO_GND] if len(regs) > HAVELLS_PV1_INSULATION_P_TO_GND else 2800
         pv2_insulation = regs[HAVELLS_PV2_INSULATION_P_TO_GND] if len(regs) > HAVELLS_PV2_INSULATION_P_TO_GND else 2800
@@ -400,9 +468,9 @@ class InverterManager:
             "total_energy": float(total_energy),
             "today_runtime_hrs": today_runtime_hrs,
             "total_runtime_hrs": float(total_runtime_hrs),
-            "module_temp": float(module_temp),
-            "inner_temp": float(inner_temp),
-            "bus_voltage": float(bus_voltage),
+            "module_temp": module_temp,
+            "inner_temp": inner_temp,
+            "bus_voltage": bus_voltage,
             "status": "Normal" if active_power > 0 else "Standby"
         }
 

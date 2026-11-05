@@ -22,7 +22,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# SQLite temp journal / wal files (keeps main .db intact for instant out-of-the-box demo)
+# SQLite database and temp journal / wal files
+solar_telemetry.db
+*.db
 *.db-wal
 *.db-shm
 *.db-journal

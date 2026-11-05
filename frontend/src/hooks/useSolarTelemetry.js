@@ -2,23 +2,25 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useSolarTelemetry() {
   const [liveData, setLiveData] = useState({
-    active_power: 3120.0,
-    pv1_voltage: 285.0,
-    pv1_current: 5.68,
-    pv1_power: 1618.0,
-    pv2_voltage: 281.0,
-    pv2_current: 5.34,
-    pv2_power: 1502.0,
-    grid_voltage: 231.2,
-    grid_current: 13.5,
-    grid_frequency: 50.02,
-    today_energy: 14.85,
-    total_energy: 4834.8,
-    module_temp: 44.5,
-    inner_temp: 36.2,
-    bus_voltage: 382.0,
-    status: 'Normal',
-    source: 'Connecting...'
+    active_power: 0.0,
+    pv1_voltage: 0.0,
+    pv1_current: 0.0,
+    pv1_power: 0.0,
+    pv2_voltage: 0.0,
+    pv2_current: 0.0,
+    pv2_power: 0.0,
+    grid_voltage: 0.0,
+    grid_current: 0.0,
+    grid_frequency: 0.0,
+    today_energy: 0.0,
+    total_energy: 0.0,
+    module_temp: 0.0,
+    inner_temp: 0.0,
+    bus_voltage: 0.0,
+    status: 'Connecting...',
+    source: 'Connecting...',
+    is_simulation: false,
+    is_load_estimated: true
   });
 
   const [connStatus, setConnStatus] = useState('connecting'); // 'live_ws' | 'polling_fallback' | 'reconnecting'
@@ -26,12 +28,13 @@ export function useSolarTelemetry() {
   const [dailyHistory, setDailyHistory] = useState([]);
   const [monthlyHistory, setMonthlyHistory] = useState([]);
   const [summary, setSummary] = useState({
-    lifetime_kwh: 4834.8,
-    lifetime_earnings: 36986.0,
-    month_kwh: 445.0,
-    month_earnings: 3404.0,
-    lifetime_co2_kg: 3964.0,
-    trees_equivalent: 182.0
+    lifetime_kwh: 0.0,
+    lifetime_earnings: 0.0,
+    month_kwh: 0.0,
+    month_earnings: 0.0,
+    today_kwh: 0.0,
+    lifetime_co2_kg: 0.0,
+    trees_equivalent: 0.0
   });
   const [config, setConfig] = useState({
     tariff_rate: 7.65,
@@ -40,10 +43,15 @@ export function useSolarTelemetry() {
     apdcl_tariff_category: 'LT-II Domestic (Net Metered)',
     inverter_model: 'Havells Enviro Pro GTi',
     inverter_sn: 'AFDOALB2PNAPJ78',
+    rated_capacity_w: 3300,
     simulation_mode: true,
-    selected_com_port: ''
+    selected_com_port: '',
+    modbus_port: '',
+    baud_rate: 9600,
+    slave_id: 1
   });
   const [availablePorts, setAvailablePorts] = useState([]);
+  const [historyLogs, setHistoryLogs] = useState([]);
 
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -102,6 +110,18 @@ export function useSolarTelemetry() {
     }
   }, []);
 
+  const fetchHistoryLogs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/telemetry/history?limit=50');
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryLogs(data);
+      }
+    } catch (e) {
+      // Silently retry later
+    }
+  }, []);
+
   // 2. Poll Status Fallback
   const pollStatusOnce = useCallback(async () => {
     try {
@@ -119,7 +139,7 @@ export function useSolarTelemetry() {
   const startPollingFallback = useCallback(() => {
     if (pollingIntervalRef.current) return;
     setConnStatus('polling_fallback');
-    pollingIntervalRef.current = setInterval(pollStatusOnce, 1200);
+    pollingIntervalRef.current = setInterval(pollStatusOnce, 1500);
   }, [pollStatusOnce]);
 
   const stopPollingFallback = useCallback(() => {
@@ -165,7 +185,6 @@ export function useSolarTelemetry() {
 
       ws.onclose = () => {
         startPollingFallback();
-        // Exponential backoff reconnect
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectWebSocket();
@@ -183,6 +202,7 @@ export function useSolarTelemetry() {
     fetchSummary();
     fetchHistory();
     fetchPorts();
+    fetchHistoryLogs();
     connectWebSocket();
 
     // Health-check: If no WS message received for > 3.5s, trigger polling fallback automatically
@@ -198,6 +218,7 @@ export function useSolarTelemetry() {
       fetchSummary();
       fetchHistory();
       fetchPorts();
+      fetchHistoryLogs();
     }, 45000);
 
     return () => {
@@ -207,7 +228,7 @@ export function useSolarTelemetry() {
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [fetchConfig, fetchSummary, fetchHistory, fetchPorts, connectWebSocket, startPollingFallback, stopPollingFallback]);
+  }, [fetchConfig, fetchSummary, fetchHistory, fetchPorts, fetchHistoryLogs, connectWebSocket, startPollingFallback, stopPollingFallback]);
 
   const updateConfig = async (newConfig) => {
     try {
@@ -221,9 +242,12 @@ export function useSolarTelemetry() {
         setConfig(data.config);
         fetchSummary();
         fetchHistory();
+        return { success: true };
       }
+      return { success: false, error: 'Server returned error status' };
     } catch (e) {
       console.error('[Config Update Error]', e);
+      return { success: false, error: e.message };
     }
   };
 
@@ -237,6 +261,9 @@ export function useSolarTelemetry() {
     config,
     availablePorts,
     updateConfig,
+    saveConfig: updateConfig,
+    historyLogs,
+    isDbConnected: connStatus !== 'reconnecting',
     refreshHistory: fetchHistory
   };
 }

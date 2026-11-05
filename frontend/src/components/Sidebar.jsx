@@ -1,18 +1,15 @@
 import React from 'react';
 import {
   LayoutGrid,
-  TrendingUp,
   BarChart3,
-  FileText,
   Cpu,
-  MapPin,
   Settings,
   Sun,
   IndianRupee,
   Activity
 } from 'lucide-react';
 
-export function Sidebar({ activeTab, setActiveTab, liveStatus }) {
+export function Sidebar({ activeTab, setActiveTab, onOpenSettings, liveStatus }) {
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: LayoutGrid },
     { id: 'flow', label: 'Power Flow', icon: Activity },
@@ -23,7 +20,7 @@ export function Sidebar({ activeTab, setActiveTab, liveStatus }) {
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ overflowY: 'auto' }}>
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="brand-icon-wrapper">
@@ -36,7 +33,7 @@ export function Sidebar({ activeTab, setActiveTab, liveStatus }) {
       <nav className="sidebar-nav">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = activeTab === item.id || (activeTab === 'billing' && item.id === 'apdcl') || (activeTab === 'diagnostics' && item.id === 'system');
           return (
             <button
               key={item.id}
@@ -65,3 +62,5 @@ export function Sidebar({ activeTab, setActiveTab, liveStatus }) {
     </aside>
   );
 }
+
+export default Sidebar;

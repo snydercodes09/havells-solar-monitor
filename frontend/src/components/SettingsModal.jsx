@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sliders, CheckCircle, Usb, IndianRupee, Cpu, Info, ShieldCheck } from 'lucide-react';
+import { X, Sliders, CheckCircle, Usb, IndianRupee, Cpu, Info, ShieldCheck, AlertCircle } from 'lucide-react';
 
 export function SettingsModal({
   isOpen = false,
@@ -11,25 +11,70 @@ export function SettingsModal({
   const [tariff, setTariff] = useState(7.65);
   const [isSim, setIsSim] = useState(true);
   const [selectedPort, setSelectedPort] = useState('');
+  const [baudRate, setBaudRate] = useState(9600);
+  const [slaveId, setSlaveId] = useState(1);
+  const [ratedCapacity, setRatedCapacity] = useState(3300);
+  const [feedback, setFeedback] = useState({ tone: '', text: '' });
 
-  // Keep internal state in sync whenever modal opens or config updates
+  // Synchronize local form state whenever modal opens or parent config updates
   useEffect(() => {
     if (config) {
       setTariff(config.tariff_rate !== undefined ? config.tariff_rate : 7.65);
-      setIsSim(config.simulation_mode !== undefined ? config.simulation_mode : true);
-      setSelectedPort(config.selected_com_port || '');
+      setIsSim(config.simulation_mode !== undefined ? Boolean(config.simulation_mode) : true);
+      setSelectedPort(config.selected_com_port || config.modbus_port || '');
+      setBaudRate(config.baud_rate !== undefined ? Number(config.baud_rate) : 9600);
+      setSlaveId(config.slave_id !== undefined ? Number(config.slave_id) : 1);
+      setRatedCapacity(config.rated_capacity_w !== undefined ? Number(config.rated_capacity_w) : 3300);
+      setFeedback({ tone: '', text: '' });
     }
   }, [config, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    onSave({
-      tariff_rate: parseFloat(tariff) || 7.65,
-      simulation_mode: Boolean(isSim),
-      selected_com_port: selectedPort || ''
-    });
-    onClose();
+  const handleSave = async () => {
+    const parsedTariff = parseFloat(tariff);
+    const parsedBaud = parseInt(baudRate, 10);
+    const parsedSlave = parseInt(slaveId, 10);
+    const parsedCapacity = parseFloat(ratedCapacity);
+
+    if (isNaN(parsedTariff) || parsedTariff <= 0 || parsedTariff > 50) {
+      setFeedback({ tone: 'error', text: 'Tariff must be a valid number between ₹1.00 and ₹50.00' });
+      return;
+    }
+    if (isNaN(parsedSlave) || parsedSlave < 1 || parsedSlave > 247) {
+      setFeedback({ tone: 'error', text: 'Modbus Slave ID must be between 1 and 247' });
+      return;
+    }
+    if (isNaN(parsedCapacity) || parsedCapacity < 500 || parsedCapacity > 50000) {
+      setFeedback({ tone: 'error', text: 'Rated capacity must be between 500W and 50000W' });
+      return;
+    }
+
+    setFeedback({ tone: 'saving', text: 'Applying configuration...' });
+
+    try {
+      const payload = {
+        tariff_rate: parsedTariff,
+        simulation_mode: Boolean(isSim),
+        selected_com_port: selectedPort || '',
+        modbus_port: selectedPort || '',
+        baud_rate: parsedBaud,
+        slave_id: parsedSlave,
+        rated_capacity_w: parsedCapacity
+      };
+      
+      const res = await onSave(payload);
+      if (res && res.success === false) {
+        setFeedback({ tone: 'error', text: res.error || 'Failed to save settings' });
+      } else {
+        setFeedback({ tone: 'success', text: 'Configuration applied successfully!' });
+        setTimeout(() => {
+          onClose();
+        }, 600);
+      }
+    } catch (err) {
+      setFeedback({ tone: 'error', text: err.message || 'Error updating settings' });
+    }
   };
 
   const portsList = Array.isArray(availablePorts) ? availablePorts : [];
@@ -55,6 +100,13 @@ export function SettingsModal({
 
         {/* Modal Body */}
         <div className="modal-body">
+          {feedback.text && (
+            <div className={`status-feedback-banner ${feedback.tone}`}>
+              {feedback.tone === 'error' ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+              <span>{feedback.text}</span>
+            </div>
+          )}
+
           {/* Setting 1: Electricity Tariff */}
           <div className="setting-field-card">
             <div className="field-label-row">
@@ -111,7 +163,7 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Setting 3: Hardware COM Port */}
+          {/* Setting 3: Hardware COM Port & RS485 Bus Parameters */}
           <div className="setting-field-card">
             <div className="field-label-row">
               <div className="flex-align gap-6">
@@ -140,6 +192,39 @@ export function SettingsModal({
                 * Note: COM port selection is disabled while Simulation Mode is active.
               </span>
             )}
+
+            <div className="grid-two-cols-settings" style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label className="field-sublabel" style={{ fontSize: '11px', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
+                  Modbus Baud Rate
+                </label>
+                <select
+                  className="modal-select-input font-mono"
+                  value={baudRate}
+                  onChange={(e) => setBaudRate(e.target.value)}
+                  disabled={isSim}
+                >
+                  <option value="4800">4800 Baud</option>
+                  <option value="9600">9600 Baud (Havells Default)</option>
+                  <option value="19200">19200 Baud</option>
+                  <option value="38400">38400 Baud</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-sublabel" style={{ fontSize: '11px', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
+                  Inverter Slave ID
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="247"
+                  className="modal-text-input font-mono"
+                  value={slaveId}
+                  onChange={(e) => setSlaveId(e.target.value)}
+                  disabled={isSim}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Plant Reference Metadata */}

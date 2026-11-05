@@ -1,30 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sun,
   Zap,
   Home,
   ArrowUpRight,
   ArrowDownRight,
-  TrendingUp,
   Cpu,
   Layers,
-  CircleDot,
-  CheckCircle2,
-  Sliders,
-  Wifi,
-  ShieldCheck,
-  Radio,
-  Car
+  CircleDot
 } from 'lucide-react';
 
-export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
+export function PowerFlowCanvas({
+  liveData = {},
+  summary = {},
+  config = {},
+  activePower: propActivePower,
+  pv1Power: propPv1Power,
+  pv2Power: propPv2Power,
+  gridVoltage: _propGridVoltage
+}) {
   // Mode: 'isometric' (matching Image 1) | 'schematic' (matching Image 2 bottom)
   const [viewMode, setViewMode] = useState('isometric');
+  const canvasRef = useRef(null);
+  const phaseRef = useRef(0);
 
-  const activePower = Math.round(Number(liveData?.active_power) || 0);
-  const pv1Power = Math.round(Number(liveData?.pv1_power) || 0);
-  const pv2Power = Math.round(Number(liveData?.pv2_power) || 0);
-  const totalDc = pv1Power + pv2Power;
+  // HiDPI scaled canvas animation with clean requestAnimationFrame cancellation on unmount (F-02)
+  useEffect(() => {
+    let animationFrameId;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          canvas.width = rect.width * dpr;
+          canvas.height = rect.height * dpr;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        const renderFrame = () => {
+          phaseRef.current = (phaseRef.current + 0.03) % (Math.PI * 2);
+          animationFrameId = requestAnimationFrame(renderFrame);
+        };
+        animationFrameId = requestAnimationFrame(renderFrame);
+      }
+    }
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [viewMode]);
+
+  const activePower = Math.round(Number(propActivePower !== undefined ? propActivePower : liveData?.active_power) || 0);
+  const pv1Power = Math.round(Number(propPv1Power !== undefined ? propPv1Power : liveData?.pv1_power) || 0);
+  const pv2Power = Math.round(Number(propPv2Power !== undefined ? propPv2Power : liveData?.pv2_power) || 0);
 
   // Dynamic residential household consumption profile (evening lights/fans ~880W, morning ~750W, daytime ~550W, night ~420W)
   const currentHour = new Date().getHours() + new Date().getMinutes() / 60;

@@ -1,27 +1,65 @@
-import React, { useState } from 'react';
-import {
-  Zap,
-  Activity,
-  IndianRupee,
-  Cpu,
-  BarChart3,
-  Sliders,
-  CheckCircle,
-  Radio
-} from 'lucide-react';
-
+import React, { useState, useMemo } from 'react';
 import { useSolarTelemetry } from './hooks/useSolarTelemetry';
 import { Sidebar } from './components/Sidebar';
 import { SolarPanelCard } from './components/SolarPanelCard';
-import { MonthlyGenerationCard } from './components/MonthlyGenerationCard';
-import { EnergyProductionChart } from './components/EnergyProductionChart';
-import { StringPointsList } from './components/StringPointsList';
 import { PowerFlowCanvas } from './components/PowerFlowCanvas';
+import { MonthlyGenerationCard } from './components/MonthlyGenerationCard';
+import { StringPointsList } from './components/StringPointsList';
+import { EnergyProductionChart } from './components/EnergyProductionChart';
 import { ApdclBillingSection } from './components/ApdclBillingSection';
-import { PersistentHistorySection } from './components/PersistentHistorySection';
 import { SystemDiagnosticsSection } from './components/SystemDiagnosticsSection';
+import { PersistentHistorySection } from './components/PersistentHistorySection';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsModal } from './components/SettingsModal';
+import './App.css';
+
+const TAB_METADATA = {
+  overview: {
+    title: 'Live Solar & Grid Overview',
+    description: 'Real-time 1 Hz RS485 Modbus RTU telemetry, dual-MPPT string balance, and instant power routing.'
+  },
+  flow: {
+    title: 'Live Power Flow Telemetry',
+    description: 'Real-time 3D isometric energy distribution between Solar PV array, Havells Inverter, Home Load, and APDCL Grid.'
+  },
+  apdcl: {
+    title: 'APDCL LT-II Net-Metering & Savings',
+    description: 'Progressive telescopic slab offset (₹5.40 / ₹6.65 / ₹7.65 per kWh), fixed demand charges, and ROI tracking.'
+  },
+  billing: {
+    title: 'APDCL LT-II Net-Metering & Savings',
+    description: 'Progressive telescopic slab offset (₹5.40 / ₹6.65 / ₹7.65 per kWh), fixed demand charges, and ROI tracking.'
+  },
+  diagnostics: {
+    title: 'Inverter Health & Safety Diagnostics',
+    description: 'Live isolation resistance, GFCI ground-fault leakage, DC injection, and thermal derating thresholds.'
+  },
+  system: {
+    title: 'Inverter Health & Safety Diagnostics',
+    description: 'Live isolation resistance, GFCI ground-fault leakage, DC injection, and thermal derating thresholds.'
+  },
+  history: {
+    title: 'Persistent SQLite Generation Archive',
+    description: 'Daily and monthly kWh production curves, peak power records, and exportable telemetry logs.'
+  },
+  settings: {
+    title: 'RS485 Serial & Tariff Configuration',
+    description: 'Configure COM port, Modbus slave parameters, APDCL tariff slabs, and simulation fallback controls.'
+  }
+};
+
+function getHealthBadge(value, normalMax, warnMax, unit = '') {
+  if (value == null || Number.isNaN(Number(value))) {
+    return { label: 'Awaiting Data', tone: 'neutral' };
+  }
+  if (value <= normalMax) {
+    return { label: `Optimal (${value}${unit})`, tone: 'emerald' };
+  }
+  if (value <= warnMax) {
+    return { label: `Elevated (${value}${unit})`, tone: 'amber' };
+  }
+  return { label: `Critical (${value}${unit})`, tone: 'danger' };
+}
 
 export default function App() {
   const {
@@ -32,12 +70,60 @@ export default function App() {
     monthlyHistory,
     summary,
     config,
+    updateConfig,
+    saveConfig,
     availablePorts,
-    updateConfig
+    historyLogs,
+    isDbConnected
   } = useSolarTelemetry();
 
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'flow' | 'apdcl' | 'history' | 'system'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'flow' | 'apdcl' | 'history' | 'system' | 'settings'
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const ratedCapacityW = Number(config?.rated_capacity_w || 3300);
+  const activePowerW = Number(liveData?.active_power || 0);
+  const capacityPct = Math.min(100, Math.round((activePowerW / ratedCapacityW) * 100));
+
+  const isSimulation = useMemo(() => {
+    const src = String(liveData?.source || '').toLowerCase();
+    const st = String(liveData?.status || '').toLowerCase();
+    return Boolean(config?.simulation_mode) || src.includes('mock') || src.includes('sim') || st.includes('sim') || Boolean(liveData?.is_simulation);
+  }, [liveData?.source, liveData?.status, liveData?.is_simulation, config?.simulation_mode]);
+
+  const gridStatus = useMemo(() => {
+    const v = Number(liveData?.grid_voltage || 0);
+    const f = Number(liveData?.grid_frequency || 0);
+    if (!v) return { label: 'Grid Offline', hint: 'No AC reference detected', tone: 'danger' };
+    if (v >= 207 && v <= 253 && f >= 49.5 && f <= 50.5) {
+      return {
+        label: 'APDCL Grid Synced',
+        hint: 'Within Indian Standard ±10% (207V–253V, 50Hz)',
+        tone: 'emerald'
+      };
+    }
+    return {
+      label: 'Voltage / Freq Deviation',
+      hint: `Outside nominal 230V ±10% window (${v.toFixed(1)}V / ${f.toFixed(2)}Hz)`,
+      tone: 'amber'
+    };
+  }, [liveData?.grid_voltage, liveData?.grid_frequency]);
+
+  const thermalStatus = useMemo(
+    () => getHealthBadge(Number(liveData?.module_temp || 0), 50, 62, '°C'),
+    [liveData?.module_temp]
+  );
+
+  const mpptBalance = useMemo(() => {
+    const p1 = Number(liveData?.pv1_power || 0);
+    const p2 = Number(liveData?.pv2_power || 0);
+    const total = p1 + p2;
+    if (total <= 0) return { p1Pct: 50, p2Pct: 50, deltaPct: 0 };
+    const p1Pct = Math.round((p1 / total) * 100);
+    const p2Pct = 100 - p1Pct;
+    return { p1Pct, p2Pct, deltaPct: Math.abs(p1Pct - p2Pct) };
+  }, [liveData?.pv1_power, liveData?.pv2_power]);
+
+  const currentTabMeta = TAB_METADATA[activeTab] || TAB_METADATA.overview;
 
   return (
     <div className="solary-layout">
@@ -50,45 +136,155 @@ export default function App() {
       />
 
       {/* 2. Main Dashboard Area */}
-      <main className="solary-main">
-        {/* Top Warm Ambient Light Header Graphic (Matching Image 1) */}
-        <div className="solary-top-ambient-banner">
-          <div className="banner-content-row">
-            <div>
-              <h2 className="overview-title">
-                {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'flow' && 'Live Power Flow Telemetry'}
-                {activeTab === 'apdcl' && 'APDCL Solar Net Metering'}
-                {activeTab === 'history' && 'Persistent Generation History'}
-                {activeTab === 'system' && 'Inverter Hardware Health'}
-                {activeTab === 'settings' && 'System Configuration & Plant Settings'}
-              </h2>
-              <span className="overview-subtitle">
-                Havells Enviro Pro GTi • Inverter S/N: <strong style={{ color: '#F1F5F9' }}>{config.inverter_sn}</strong>
-              </span>
+      <main className="solary-main main-content">
+        {/* Top Context Header (F-04) */}
+        <header className="top-header">
+          <div className="header-title-group">
+            <div className="eyebrow-row">
+              <span className="brand-badge">HAVELLS ENVIRO PRO GTi</span>
+              <span className="capacity-chip">{(ratedCapacityW / 1000).toFixed(1)} kW Single-Phase On-Grid</span>
             </div>
-
-            {/* Live Status Indicator */}
-            <div className="top-status-indicator">
-              <span className="live-status-pill">
-                <span className="pulse-indicator"></span>
-                <span>
-                  {connStatus === 'live_ws'
-                    ? 'LIVE (1 Hz Stream)'
-                    : connStatus === 'polling_fallback'
-                    ? 'LIVE (Auto-Polling)'
-                    : 'CONNECTING...'}
-                </span>
-              </span>
-            </div>
+            <h1>{currentTabMeta.title}</h1>
+            <p className="subtitle">{currentTabMeta.description}</p>
           </div>
-        </div>
 
-        {/* ================= VIEW 1: OVERVIEW (MATCHING IMAGE 1) ================= */}
+          <div className="status-indicators">
+            <div
+              className={`status-pill ${connStatus}`}
+              title={
+                connStatus === 'live_ws'
+                  ? 'Streaming 1 Hz push frames over WebSocket'
+                  : connStatus === 'polling_fallback'
+                  ? 'WebSocket unavailable — polling REST endpoint every 1.5s'
+                  : 'Attempting to re-establish link to FastAPI gateway'
+              }
+            >
+              <span className="dot"></span>
+              <div className="status-pill-text">
+                <span className="status-primary">
+                  {connStatus === 'live_ws'
+                    ? '1 Hz WebSocket Live'
+                    : connStatus === 'polling_fallback'
+                    ? 'HTTP Fallback (1.5s)'
+                    : 'Reconnecting...'}
+                </span>
+                <span className="status-sub">
+                  {isSimulation ? 'Simulated Physics Engine' : `RS485 (${config?.selected_com_port || config?.modbus_port || 'COM Port'})`}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="settings-trigger-btn"
+              onClick={() => setIsSettingsOpen(true)}
+              aria-label="Open Serial & Tariff Settings"
+            >
+              ⚙️ Configure
+            </button>
+          </div>
+        </header>
+
+        {/* Unmistakable Hardware vs. Simulation Context Banner (F-04) */}
+        {isSimulation && (
+          <section className="data-source-banner warning" role="status" aria-live="polite">
+            <div className="banner-content">
+              <span className="banner-badge">SIMULATION FALLBACK</span>
+              <p className="banner-text">
+                <strong>Hardware RS485 Telemetry Inactive:</strong> Showing synthetic solar & household load values ({liveData?.source || 'No USB-RS485 response'}). Household load and grid import/export require an external bidirectional CT meter or active COM port link.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="banner-action-btn"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              Select RS485 Port
+            </button>
+          </section>
+        )}
+
+        {/* Descriptive 4-Card Hero KPI Strip (F-04) */}
+        <section className="kpi-hero-strip" aria-label="Key System Telemetry Summary">
+          {/* Card 1: Instant AC Generation */}
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Instant AC Generation</span>
+              <span className="kpi-badge emerald">{capacityPct}% of Rated Peak</span>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-value">{(activePowerW / 1000).toFixed(2)}</span>
+              <span className="kpi-unit">kW</span>
+              <span className="kpi-secondary">({activePowerW.toFixed(0)} W)</span>
+            </div>
+            <div className="kpi-progress-track" aria-hidden="true">
+              <div className="kpi-progress-fill emerald" style={{ width: `${capacityPct}%` }} />
+            </div>
+            <p className="kpi-description">
+              Converting DC string input at <strong>{liveData?.bus_voltage || 380}V DC bus</strong> into synchronized AC power.
+            </p>
+          </article>
+
+          {/* Card 2: Dual-MPPT String Balance */}
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Dual-MPPT String Balance</span>
+              <span className={`kpi-badge ${mpptBalance.deltaPct > 20 ? 'amber' : 'blue'}`}>
+                {mpptBalance.p1Pct}% / {mpptBalance.p2Pct}% Split
+              </span>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-value">
+                {((Number(liveData?.pv1_power || 0) + Number(liveData?.pv2_power || 0)) / 1000).toFixed(2)}
+              </span>
+              <span className="kpi-unit">kW DC</span>
+            </div>
+            <p className="kpi-description">
+              PV1: <strong>{liveData?.pv1_voltage || 0}V · {liveData?.pv1_current || 0}A</strong> | PV2:{' '}
+              <strong>{liveData?.pv2_voltage || 0}V · {liveData?.pv2_current || 0}A</strong> (Optimal MPPT: 120V–450V).
+            </p>
+          </article>
+
+          {/* Card 3: APDCL Grid Point (PCC) */}
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">APDCL Grid Point (PCC)</span>
+              <span className={`kpi-badge ${gridStatus.tone}`}>{gridStatus.label}</span>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-value">{Number(liveData?.grid_voltage || 0).toFixed(1)}</span>
+              <span className="kpi-unit">V AC</span>
+              <span className="kpi-secondary">@ {Number(liveData?.grid_frequency || 0).toFixed(2)} Hz</span>
+            </div>
+            <p className="kpi-description">
+              Exporting <strong>{Number(liveData?.grid_current || 0).toFixed(1)} A</strong> to single-phase feeder. {gridStatus.hint}.
+            </p>
+          </article>
+
+          {/* Card 4: Today's Yield & Thermal State */}
+          <article className="kpi-card">
+            <div className="kpi-header">
+              <span className="kpi-label">Today's Yield & Thermal State</span>
+              <span className={`kpi-badge ${thermalStatus.tone}`}>IGBT {thermalStatus.label}</span>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-value">{Number(liveData?.today_energy || summary?.today_kwh || 0).toFixed(2)}</span>
+              <span className="kpi-unit">kWh</span>
+              <span className="kpi-secondary">
+                (≈ ₹{((Number(liveData?.today_energy || summary?.today_kwh || 0)) * Number(config?.tariff_rate || 7.65)).toFixed(0)} saved)
+              </span>
+            </div>
+            <p className="kpi-description">
+              Cabin temp <strong>{liveData?.inner_temp || 0}°C</strong> (Thermal derating begins above 60°C heatsink).
+            </p>
+          </article>
+        </section>
+
+        {/* ================= VIEW 1: OVERVIEW ================= */}
         {activeTab === 'overview' && (
           <div className="solary-dashboard-grid fade-in">
             {/* Top Row: Solar Panel Hero + Monthly Generation */}
-            <div className="grid-row-top">
+            <div className="grid-row-top" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '1.25rem', marginBottom: '1.25rem' }}>
               <SolarPanelCard
                 liveData={liveData}
                 config={config}
@@ -102,7 +298,7 @@ export default function App() {
             </div>
 
             {/* Bottom Row: Energy Produced Spline Chart + Panel Points */}
-            <div className="grid-row-bottom">
+            <div className="grid-row-bottom" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(300px, 1fr)', gap: '1.25rem' }}>
               <EnergyProductionChart
                 todayCurve={todayCurve}
                 dailyHistory={dailyHistory}
@@ -116,23 +312,23 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= VIEW 2: POWER FLOW ================= */}
+        {/* ================= VIEW 2: POWER FLOW (3D Isometric + Schematic) ================= */}
         {activeTab === 'flow' && (
-          <div className="fade-in" style={{ padding: '0 28px 28px' }}>
+          <div className="fade-in">
             <PowerFlowCanvas liveData={liveData} summary={summary} config={config} />
           </div>
         )}
 
         {/* ================= VIEW 3: APDCL BILLING ================= */}
-        {activeTab === 'apdcl' && (
-          <div className="fade-in" style={{ padding: '0 28px 28px' }}>
+        {(activeTab === 'apdcl' || activeTab === 'billing') && (
+          <div className="fade-in">
             <ApdclBillingSection summary={summary} config={config} />
           </div>
         )}
 
         {/* ================= VIEW 4: PERSISTENT HISTORY ================= */}
         {activeTab === 'history' && (
-          <div className="fade-in" style={{ padding: '0 28px 28px' }}>
+          <div className="fade-in">
             <PersistentHistorySection
               dailyHistory={dailyHistory}
               monthlyHistory={monthlyHistory}
@@ -144,34 +340,37 @@ export default function App() {
         )}
 
         {/* ================= VIEW 5: SYSTEM HEALTH & REGISTERS ================= */}
-        {activeTab === 'system' && (
-          <div className="fade-in" style={{ padding: '0 28px 28px' }}>
+        {(activeTab === 'system' || activeTab === 'diagnostics') && (
+          <div className="fade-in">
             <SystemDiagnosticsSection
               liveData={liveData}
               summary={summary}
               config={config}
+              historyLogs={historyLogs}
+              isDbConnected={isDbConnected}
             />
           </div>
         )}
-        {/* ================= VIEW 6: SETTINGS TAB ================= */}
+
+        {/* ================= VIEW 6: SETTINGS ================= */}
         {activeTab === 'settings' && (
-          <div className="fade-in" style={{ padding: '0 28px 28px' }}>
+          <div className="fade-in">
             <SettingsSection
               config={config}
               availablePorts={availablePorts}
-              onSave={updateConfig}
+              onSave={updateConfig || saveConfig}
             />
           </div>
         )}
       </main>
 
-      {/* Settings Modal */}
+      {/* Global Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         config={config}
         availablePorts={availablePorts}
-        onSave={updateConfig}
+        onSave={updateConfig || saveConfig}
       />
     </div>
   );

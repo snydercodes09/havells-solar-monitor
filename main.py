@@ -1,66 +1,114 @@
 """
 FastAPI Server & WebSocket Gateway for Havells Solar Monitor
-Serves the React Glassmorphism Dashboard, provides REST endpoints & live WebSockets.
+Serves the React Dashboard, provides REST endpoints & live WebSockets.
 """
 
 import os
 import json
 import asyncio
-from datetime import datetime
+from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import serial.tools.list_ports
 
 import database
 from modbus_reader import inverter_hub
 
-# Initialize database
+# Initialize database schema & seeding
 database.init_db()
 
-active_connections = set()
-main_loop = None
+active_connections: set[WebSocket] = set()
+main_loop: Optional[asyncio.AbstractEventLoop] = None
+telemetry_queue: asyncio.Queue = asyncio.Queue(maxsize=5)
+broadcaster_task_handle: Optional[asyncio.Task] = None
 
-def broadcast_reading(data: dict):
-    global main_loop, active_connections
-    if not active_connections or not main_loop:
-        return
-    payload = json.dumps(data)
-    for ws in list(active_connections):
-        asyncio.run_coroutine_threadsafe(send_ws(ws, payload), main_loop)
-
-async def send_ws(ws: WebSocket, payload: str):
+def _enqueue_latest(data: dict):
+    """Enqueues incoming telemetry from the Modbus background thread, dropping oldest if full."""
+    if telemetry_queue.full():
+        try:
+            telemetry_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
     try:
-        await ws.send_text(payload)
-    except Exception:
-        active_connections.discard(ws)
+        telemetry_queue.put_nowait(data)
+    except asyncio.QueueFull:
+        pass
+
+def on_modbus_reading(data: dict):
+    """Callback invoked by InverterManager background thread upon fresh telemetry sample."""
+    global main_loop
+    if main_loop and main_loop.is_running():
+        main_loop.call_soon_threadsafe(_enqueue_latest, data)
+
+async def ws_broadcaster_task():
+    """Native coroutine consuming telemetry_queue and broadcasting to all connected WebSockets."""
+    while True:
+        try:
+            data = await telemetry_queue.get()
+            payload = json.dumps(data)
+            dead_sockets = []
+            
+            for ws in list(active_connections):
+                try:
+                    await asyncio.wait_for(ws.send_text(payload), timeout=1.0)
+                except Exception:
+                    dead_sockets.append(ws)
+                    
+            for ws in dead_sockets:
+                active_connections.discard(ws)
+                
+            telemetry_queue.task_done()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            await asyncio.sleep(0.05)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global main_loop
+    global main_loop, broadcaster_task_handle
     main_loop = asyncio.get_running_loop()
-    inverter_hub.listeners.append(broadcast_reading)
+    
+    # Run startup data retention pruning (delete raw samples older than 7 days)
+    database.cleanup_old_telemetry(days=7)
+    
+    # Launch native queue-based broadcaster
+    broadcaster_task_handle = asyncio.create_task(ws_broadcaster_task())
+    
+    # Wire Inverter Hub callback
+    inverter_hub.listeners.append(on_modbus_reading)
     inverter_hub.start()
-    print("[Startup] Havells Solar Logger background thread started.")
+    print("[Startup] Havells Solar Logger & WebSocket Gateway initialized.")
+    
     yield
+    
+    # Graceful shutdown
     inverter_hub.is_running = False
     if inverter_hub.modbus_client:
         inverter_hub.modbus_client.close()
-    print("[Shutdown] Havells Solar Logger stopped.")
+    if broadcaster_task_handle:
+        broadcaster_task_handle.cancel()
+        try:
+            await broadcaster_task_handle
+        except asyncio.CancelledError:
+            pass
+    print("[Shutdown] Havells Solar Logger stopped cleanly.")
 
 app = FastAPI(title="Havells Solar Monitor - APDCL", version="3.0.0", lifespan=lifespan)
 
 # --- REST ENDPOINTS ---
 
 @app.get("/api/status")
+@app.get("/api/telemetry/latest")
 async def get_status():
     """Returns the latest live snapshot"""
     return inverter_hub.latest_data or inverter_hub.simulator.get_reading()
 
 @app.get("/api/history/today")
+@app.get("/api/telemetry/today-curve")
 async def get_today_history():
-    """Returns today's downsampled readings for line chart"""
+    """Returns today's downsampled readings for line chart using indexed timestamp range"""
     return database.get_today_readings()
 
 @app.get("/api/history/daily")
@@ -73,9 +121,15 @@ async def get_monthly_history():
     """Returns monthly generation and APDCL bill savings history"""
     return database.get_monthly_summary()
 
+@app.get("/api/telemetry/history")
+async def get_telemetry_history(limit: int = 100):
+    """Returns recent raw telemetry samples for diagnostics & log inspection"""
+    return database.get_recent_telemetry(limit=limit)
+
 @app.get("/api/metrics/summary")
+@app.get("/api/analytics/summary")
 async def get_metrics_summary():
-    """Returns lifetime totals, this month's APDCL savings, and eco metrics"""
+    """Returns lifetime totals, this month's APDCL savings, and eco metrics dynamically from SQLite"""
     return database.get_overall_summary()
 
 @app.get("/api/ports")
@@ -104,7 +158,10 @@ async def get_config():
         "inverter_sn": database.get_config_value("inverter_sn", "AFDOALB2PNAPJ78"),
         "rated_capacity_w": float(database.get_config_value("rated_capacity_w", "3300")),
         "simulation_mode": database.get_config_value("simulation_mode", "true") == "true",
-        "selected_com_port": database.get_config_value("selected_com_port", "")
+        "selected_com_port": database.get_config_value("selected_com_port", ""),
+        "modbus_port": database.get_config_value("selected_com_port", ""),
+        "baud_rate": int(database.get_config_value("baud_rate", "9600")),
+        "slave_id": int(database.get_config_value("slave_id", "1"))
     }
 
 @app.post("/api/config")
@@ -112,32 +169,46 @@ async def update_config(req: Request):
     """Updates user configuration settings"""
     body = await req.json()
     if "tariff_rate" in body:
-        database.set_config_value("tariff_rate", str(body["tariff_rate"]))
-    if "simulation_mode" in body:
-        use_sim = bool(body["simulation_mode"])
-        com_port = body.get("selected_com_port", database.get_config_value("selected_com_port", ""))
-        inverter_hub.set_mode(use_sim, com_port)
-    if "selected_com_port" in body:
-        com_port = str(body["selected_com_port"])
-        use_sim = database.get_config_value("simulation_mode", "true") == "true"
-        inverter_hub.set_mode(use_sim, com_port)
+        database.set_config_value("tariff_rate", str(float(body["tariff_rate"])))
+    if "rated_capacity_w" in body:
+        database.set_config_value("rated_capacity_w", str(float(body["rated_capacity_w"])))
+    if "baud_rate" in body:
+        database.set_config_value("baud_rate", str(int(body["baud_rate"])))
+    if "slave_id" in body:
+        database.set_config_value("slave_id", str(int(body["slave_id"])))
+        
+    com_port = body.get("selected_com_port", body.get("modbus_port", None))
+    use_sim = body.get("simulation_mode", None)
+    
+    if com_port is not None or use_sim is not None:
+        curr_port = str(com_port) if com_port is not None else database.get_config_value("selected_com_port", "")
+        curr_sim = bool(use_sim) if use_sim is not None else (database.get_config_value("simulation_mode", "true") == "true")
+        inverter_hub.set_mode(curr_sim, curr_port)
+        
     return {"status": "ok", "config": await get_config()}
 
 # --- WEBSOCKET STREAMING ---
 
-@app.websocket("/ws/live")
-async def websocket_live_stream(websocket: WebSocket):
+async def handle_websocket_client(websocket: WebSocket):
     await websocket.accept()
     active_connections.add(websocket)
     try:
         if inverter_hub.latest_data:
             await websocket.send_text(json.dumps(inverter_hub.latest_data))
         while True:
-            msg = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
         active_connections.discard(websocket)
     except Exception:
         active_connections.discard(websocket)
+
+@app.websocket("/ws/live")
+async def websocket_live_stream(websocket: WebSocket):
+    await handle_websocket_client(websocket)
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry_stream(websocket: WebSocket):
+    await handle_websocket_client(websocket)
 
 # --- REACT FRONTEND SERVING ---
 
@@ -149,6 +220,17 @@ if os.path.exists(ASSETS_DIR):
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def serve_react_app(full_path: str):
+    # Guard against SPA catching API or WebSocket routes
+    if full_path.startswith(("api/", "ws/")):
+        raise HTTPException(status_code=404, detail=f"Endpoint /{full_path} not found")
+
+    # Serve static assets (favicon.svg, icons.svg, etc.) if requested
+    if full_path:
+        requested_file = os.path.join(DIST_DIR, full_path)
+        if os.path.isfile(requested_file):
+            return FileResponse(requested_file)
+
+    # Fallback to SPA index.html
     index_file = os.path.join(DIST_DIR, "index.html")
     if os.path.exists(index_file):
         with open(index_file, "r", encoding="utf-8") as f:
