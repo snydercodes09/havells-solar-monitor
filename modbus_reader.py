@@ -192,17 +192,54 @@ class SolarZenithSimulator:
             kwh_increment = (active_power * dt) / (3600.0 * 1000.0)
             self.cumulative_kwh_today += kwh_increment
 
+        total_dc_power = round(pv1_power + pv2_power, 1)
+
+        # Reactive power, Apparent power, Power Factor, and Efficiency
+        if active_power > 0:
+            reactive_power = round(0.02 + random.uniform(-0.01, 0.02), 2)
+            apparent_power = round(math.sqrt(active_power**2 + (reactive_power * 1000)**2), 1)
+            power_factor = round(min(1.0, active_power / apparent_power), 3)
+            inverter_efficiency = round(min(98.1, max(95.0, (active_power / total_dc_power) * 100)), 1)
+            gfci_leakage = round(8.4 + random.uniform(-1.0, 1.2), 1)
+            dci_injection = round(3.5 + random.uniform(-0.6, 0.7), 1)
+        else:
+            reactive_power = 0.00
+            apparent_power = 0.0
+            power_factor = 1.000
+            inverter_efficiency = 0.0
+            gfci_leakage = round(2.1 + random.uniform(-0.2, 0.2), 1)
+            dci_injection = 0.0
+
+        # Safety insulation resistance (kOhms - >1000k is safe)
+        pv1_insulation = round(2840.0 + random.uniform(-30, 30), 0)
+        pv2_insulation = round(2790.0 + random.uniform(-30, 30), 0)
+        pv_n_insulation = round(3160.0 + random.uniform(-40, 40), 0)
+
+        # Operating running time (Hours)
+        today_runtime_hrs = round(min(12.5, max(0.0, hour - sunrise)), 1) if hour >= sunrise else 0.0
+        total_runtime_hrs = round(3418.0 + (self.cumulative_kwh_today / 2.5), 1)
+
         home_load, grid_import, grid_export = compute_household_flow(active_power)
 
         return {
             "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
             "active_power": active_power,
+            "reactive_power": reactive_power,
+            "apparent_power": apparent_power,
+            "power_factor": power_factor,
+            "inverter_efficiency": inverter_efficiency,
+            "total_dc_power": total_dc_power,
             "pv1_voltage": pv1_voltage,
             "pv1_current": pv1_current,
             "pv1_power": pv1_power,
             "pv2_voltage": pv2_voltage,
             "pv2_current": pv2_current,
             "pv2_power": pv2_power,
+            "pv1_insulation": pv1_insulation,
+            "pv2_insulation": pv2_insulation,
+            "pv_n_insulation": pv_n_insulation,
+            "gfci_leakage": gfci_leakage,
+            "dci_injection": dci_injection,
             "grid_voltage": grid_voltage,
             "grid_current": grid_current,
             "grid_frequency": grid_frequency,
@@ -211,6 +248,8 @@ class SolarZenithSimulator:
             "grid_export": grid_export,
             "today_energy": round(self.cumulative_kwh_today, 2),
             "total_energy": round(self.base_total_kwh + self.cumulative_kwh_today, 1),
+            "today_runtime_hrs": today_runtime_hrs,
+            "total_runtime_hrs": total_runtime_hrs,
             "module_temp": module_temp,
             "inner_temp": inner_temp,
             "bus_voltage": bus_voltage,
@@ -298,29 +337,59 @@ class InverterManager:
         pv2_p = round(regs[HAVELLS_PV_2_POWER] * MULTIPLY_TEN_UNIT, 1)
 
         active_power = round(regs[HAVELLS_SYSTEM_ACTIVE_POWER] * MULTIPLY_TEN_UNIT, 1)
+        raw_reactive = regs[HAVELLS_SYSTEM_REACTIVE_POWER]
+        if raw_reactive > 32767:
+            raw_reactive -= 65536
+        reactive_power = round(raw_reactive * TWO_DEC_UNIT, 2)
+
         grid_freq = round(regs[HAVELLS_GRID_FREQUENCY] * TWO_DEC_UNIT, 2)
         grid_v = round(regs[HAVELLS_PHASE_1_VOLTAGE] * ONE_DEC_UNIT, 1)
         grid_i = round(regs[HAVELLS_PHASE_1_CURRENT] * TWO_DEC_UNIT, 2)
+
+        apparent_power = round(grid_v * grid_i, 1)
+        power_factor = round(min(1.0, active_power / apparent_power), 3) if apparent_power > 0 else 1.000
+
+        total_dc_p = round(pv1_p + pv2_p, 1)
+        eff = round((active_power / total_dc_p) * 100, 1) if total_dc_p > 0 else 0.0
 
         # 32-bit total energy (registers 0x15 and 0x16)
         total_energy = (regs[HAVELLS_TOTAL_ENERGY_PRODUCTION] << 16) | regs[HAVELLS_TOTAL_ENERGY_PRODUCTION + 1]
         today_energy = round(regs[HAVELLS_TODAY_PRODUCTION] * TWO_DEC_UNIT, 2)
 
+        total_runtime_hrs = (regs[HAVELLS_TOTAL_GENERATION_TIME] << 16) | regs[HAVELLS_TOTAL_GENERATION_TIME + 1]
+        today_runtime_hrs = round(regs[HAVELLS_TODAY_GENERATION_TIME] * 0.1, 1)
+
         module_temp = regs[HAVELLS_INVERTER_MODULE_TEMP]
         inner_temp = regs[HAVELLS_INVERTER_INNER_TEMP]
         bus_voltage = regs[HAVELLS_INVERTER_BUS_VOLTAGE]
+
+        pv1_insulation = regs[HAVELLS_PV1_INSULATION_P_TO_GND] if len(regs) > HAVELLS_PV1_INSULATION_P_TO_GND else 2800
+        pv2_insulation = regs[HAVELLS_PV2_INSULATION_P_TO_GND] if len(regs) > HAVELLS_PV2_INSULATION_P_TO_GND else 2800
+        pv_n_insulation = regs[HAVELLS_INSULATION_PV_N_TO_GND] if len(regs) > HAVELLS_INSULATION_PV_N_TO_GND else 3100
+        gfci_leakage = round(regs[HAVELLS_GFCI_VALUE] * 1.0, 1) if len(regs) > HAVELLS_GFCI_VALUE else 8.0
+        dci_injection = round(regs[HAVELLS_DCI_OF_R] * 1.0, 1) if len(regs) > HAVELLS_DCI_OF_R else 3.0
 
         home_load, grid_import, grid_export = compute_household_flow(active_power)
 
         return {
             "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
             "active_power": active_power,
+            "reactive_power": reactive_power,
+            "apparent_power": apparent_power,
+            "power_factor": power_factor,
+            "inverter_efficiency": eff,
+            "total_dc_power": total_dc_p,
             "pv1_voltage": pv1_v,
             "pv1_current": pv1_i,
             "pv1_power": pv1_p,
             "pv2_voltage": pv2_v,
             "pv2_current": pv2_i,
             "pv2_power": pv2_p,
+            "pv1_insulation": pv1_insulation,
+            "pv2_insulation": pv2_insulation,
+            "pv_n_insulation": pv_n_insulation,
+            "gfci_leakage": gfci_leakage,
+            "dci_injection": dci_injection,
             "grid_voltage": grid_v,
             "grid_current": grid_i,
             "grid_frequency": grid_freq,
@@ -329,6 +398,8 @@ class InverterManager:
             "grid_export": grid_export,
             "today_energy": today_energy,
             "total_energy": float(total_energy),
+            "today_runtime_hrs": today_runtime_hrs,
+            "total_runtime_hrs": float(total_runtime_hrs),
             "module_temp": float(module_temp),
             "inner_temp": float(inner_temp),
             "bus_voltage": float(bus_voltage),

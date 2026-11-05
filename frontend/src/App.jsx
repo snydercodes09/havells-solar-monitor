@@ -19,6 +19,7 @@ import { StringPointsList } from './components/StringPointsList';
 import { PowerFlowCanvas } from './components/PowerFlowCanvas';
 import { ApdclBillingSection } from './components/ApdclBillingSection';
 import { PersistentHistorySection } from './components/PersistentHistorySection';
+import { SystemDiagnosticsSection } from './components/SystemDiagnosticsSection';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsModal } from './components/SettingsModal';
 
@@ -145,51 +146,11 @@ export default function App() {
         {/* ================= VIEW 5: SYSTEM HEALTH & REGISTERS ================= */}
         {activeTab === 'system' && (
           <div className="fade-in" style={{ padding: '0 28px 28px' }}>
-            <div className="solary-card">
-              <h3 className="card-heading" style={{ marginBottom: '16px' }}>Havells Modbus RTU Register Diagnostics</h3>
-              <div className="system-specs-grid">
-                <div className="spec-item">
-                  <span className="spec-label">Inverter Model</span>
-                  <span className="spec-val">Havells Enviro Pro GTi 3.3kW</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Inverter Serial Number</span>
-                  <span className="spec-val font-mono">{config.inverter_sn}</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Datalogger Stick S/N</span>
-                  <span className="spec-val font-mono">SRBAN7JD3S (PRO Wi-Fi)</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Assigned Inverter IP</span>
-                  <span className="spec-val text-cyan font-mono">192.168.1.5</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">AC Line Voltage</span>
-                  <span className="spec-val">{liveData.grid_voltage} V</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Grid Frequency</span>
-                  <span className="spec-val">{liveData.grid_frequency} Hz (Nominal 50Hz)</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">IGBT Module Temp</span>
-                  <span className="spec-val text-emerald">{liveData.module_temp} °C</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Internal Bus Voltage</span>
-                  <span className="spec-val">{liveData.bus_voltage} V</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Total Generation (Lifetime)</span>
-                  <span className="spec-val text-amber font-bold">{summary.lifetime_kwh} kWh</span>
-                </div>
-                <div className="spec-item">
-                  <span className="spec-label">Current Modbus Source</span>
-                  <span className="spec-val text-cyan">{liveData.source}</span>
-                </div>
-              </div>
-            </div>
+            <SystemDiagnosticsSection
+              liveData={liveData}
+              summary={summary}
+              config={config}
+            />
           </div>
         )}
         {/* ================= VIEW 6: SETTINGS TAB ================= */}

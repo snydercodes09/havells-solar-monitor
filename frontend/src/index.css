@@ -2525,6 +2525,26 @@ body {
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
 }
 
+/* System Diagnostics Register Inspector Styles */
+.register-table-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.reg-filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--card-border);
+}
+
 .settings-save-button:hover {
   background: var(--accent-blue-hover);
   transform: translateY(-1px);

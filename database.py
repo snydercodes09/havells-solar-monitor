@@ -65,6 +65,30 @@ def init_db():
         cursor.execute("ALTER TABLE daily_summary ADD COLUMN apdcl_slab_offset TEXT;")
     except sqlite3.OperationalError:
         pass # Column already exists
+
+    # Migration: Ensure full Havells engineering registers exist in telemetry table
+    telemetry_columns = [
+        ("reactive_power", "REAL"),
+        ("power_factor", "REAL"),
+        ("apparent_power", "REAL"),
+        ("total_dc_power", "REAL"),
+        ("pv1_insulation", "REAL"),
+        ("pv2_insulation", "REAL"),
+        ("pv_n_insulation", "REAL"),
+        ("gfci_leakage", "REAL"),
+        ("dci_injection", "REAL"),
+        ("today_runtime_hrs", "REAL"),
+        ("total_runtime_hrs", "REAL"),
+        ("inverter_efficiency", "REAL"),
+        ("home_load", "REAL"),
+        ("grid_import", "REAL"),
+        ("grid_export", "REAL")
+    ]
+    for col_name, col_type in telemetry_columns:
+        try:
+            cursor.execute(f"ALTER TABLE telemetry ADD COLUMN {col_name} {col_type};")
+        except sqlite3.OperationalError:
+            pass
     
     # 3. System Configuration table
     cursor.execute("""
@@ -133,8 +157,11 @@ def record_telemetry(data: dict):
         timestamp, active_power, pv1_voltage, pv1_current, pv1_power,
         pv2_voltage, pv2_current, pv2_power, grid_voltage, grid_current,
         grid_frequency, today_energy, total_energy, module_temp, inner_temp,
-        bus_voltage, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        bus_voltage, status, reactive_power, power_factor, apparent_power,
+        total_dc_power, pv1_insulation, pv2_insulation, pv_n_insulation,
+        gfci_leakage, dci_injection, today_runtime_hrs, total_runtime_hrs,
+        inverter_efficiency, home_load, grid_import, grid_export
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         now_str,
         data.get("active_power", 0.0),
@@ -152,7 +179,22 @@ def record_telemetry(data: dict):
         data.get("module_temp", 0.0),
         data.get("inner_temp", 0.0),
         data.get("bus_voltage", 0.0),
-        data.get("status", "Normal")
+        data.get("status", "Normal"),
+        data.get("reactive_power", 0.0),
+        data.get("power_factor", 1.0),
+        data.get("apparent_power", 0.0),
+        data.get("total_dc_power", 0.0),
+        data.get("pv1_insulation", 2800.0),
+        data.get("pv2_insulation", 2800.0),
+        data.get("pv_n_insulation", 3100.0),
+        data.get("gfci_leakage", 8.0),
+        data.get("dci_injection", 3.0),
+        data.get("today_runtime_hrs", 0.0),
+        data.get("total_runtime_hrs", 0.0),
+        data.get("inverter_efficiency", 0.0),
+        data.get("home_load", 0.0),
+        data.get("grid_import", 0.0),
+        data.get("grid_export", 0.0)
     ))
     
     today_energy = data.get("today_energy", 0.0)

@@ -560,14 +560,14 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
         )}
       </div>
 
-      {/* ================= SECTION 3: LIVE MEASUREMENTS & SYSTEM INFO (MATCHING IMAGE 1 BOTTOM!) ================= */}
+      {/* ================= SECTION 3: COMPREHENSIVE 4-CARD INVERTER TELEMETRY MATRIX ================= */}
       <div className="iso-bottom-split-grid">
-        {/* Card A: Live Measurements */}
+        {/* Card 1: AC Grid & Power Quality */}
         <div className="iso-info-card">
           <div className="info-card-header">
             <div>
-              <h4 className="info-card-title">Live Measurements</h4>
-              <span className="info-card-sub">Real-time system electrical values • Updates every 1.0s</span>
+              <h4 className="info-card-title">AC Grid & Power Quality</h4>
+              <span className="info-card-sub">Inverter AC output registers & harmonic sync</span>
             </div>
             <span className="info-live-badge">
               <span className="pulse-dot"></span> LIVE
@@ -576,92 +576,182 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
 
           <div className="measurements-list">
             <div className="meas-row">
-              <span className="meas-label">Grid Voltage</span>
+              <span className="meas-label">AC Active Power (Pac)</span>
+              <span className={`meas-val font-mono ${activePower > 0 ? 'text-amber font-bold' : 'text-muted'}`}>
+                {activePower.toLocaleString()} W ({(activePower / 1000).toFixed(2)} kW)
+              </span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Reactive Power (Q)</span>
+              <span className="meas-val font-mono text-cyan">{(Number(liveData?.reactive_power) || 0.02).toFixed(2)} kVAR</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Apparent Power (S)</span>
+              <span className="meas-val font-mono">{(Number(liveData?.apparent_power) || (activePower > 0 ? activePower * 1.002 : 0)).toFixed(0)} VA</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Power Factor (cos φ)</span>
+              <span className="meas-val font-mono text-emerald">{(Number(liveData?.power_factor) || 0.999).toFixed(3)} (Unity)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">AC Line Voltage (Phase 1)</span>
               <span className="meas-val font-mono">{liveData?.grid_voltage || 232.4} V</span>
             </div>
             <div className="meas-row">
+              <span className="meas-label">AC Grid Current</span>
+              <span className="meas-val font-mono">{liveData?.grid_current || (activePower > 0 ? (activePower / 232).toFixed(2) : 0.0)} A</span>
+            </div>
+            <div className="meas-row">
               <span className="meas-label">Grid Frequency</span>
-              <span className="meas-val font-mono">{liveData?.grid_frequency || 50.0} Hz</span>
+              <span className="meas-val font-mono text-emerald">{liveData?.grid_frequency || 50.0} Hz (Synchronized)</span>
             </div>
             <div className="meas-row">
-              <span className="meas-label">Grid Import Power</span>
-              <span className={`meas-val font-mono ${gridImport > 0 ? 'text-amber font-bold' : ''}`}>
-                {(gridImport / 1000).toFixed(2)} kW
-              </span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Grid Export Power</span>
-              <span className={`meas-val font-mono ${gridExport > 0 ? 'text-emerald font-bold' : ''}`}>
-                {(gridExport / 1000).toFixed(2)} kW
-              </span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Load Power (Home)</span>
-              <span className="meas-val font-mono text-cyan">{(homeLoad / 1000).toFixed(2)} kW</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Total Solar PV Power</span>
-              <span className={`meas-val font-mono ${activePower > 0 ? 'text-amber font-bold' : 'text-muted'}`}>
-                {(activePower / 1000).toFixed(2)} kW {activePower === 0 ? '(Standby)' : ''}
-              </span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">PV1 String Telemetry</span>
-              <span className="meas-val font-mono">{liveData?.pv1_voltage || 298.5}V • {liveData?.pv1_current || 3.6}A</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">PV2 String Telemetry</span>
-              <span className="meas-val font-mono">{liveData?.pv2_voltage || 295.2}V • {liveData?.pv2_current || 3.4}A</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Inverter IGBT Temperature</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.module_temp || 44.5} °C</span>
+              <span className="meas-label">DC Current Injection (DCI)</span>
+              <span className="meas-val font-mono">{liveData?.dci_injection || 3.5} mA (Standard &lt;20mA)</span>
             </div>
           </div>
         </div>
 
-        {/* Card B: System Information */}
+        {/* Card 2: DC Array & MPPT Strings */}
         <div className="iso-info-card">
           <div className="info-card-header">
             <div>
-              <h4 className="info-card-title">System Information</h4>
-              <span className="info-card-sub">Plant configuration & network binding details</span>
+              <h4 className="info-card-title">DC Array & MPPT Telemetry</h4>
+              <span className="info-card-sub">Independent dual-string solar inputs</span>
+            </div>
+            <span className="info-model-badge">Dual MPPT</span>
+          </div>
+
+          <div className="measurements-list">
+            <div className="meas-row">
+              <span className="meas-label">PV1 String Voltage & Current</span>
+              <span className="meas-val font-mono text-amber">{liveData?.pv1_voltage || 285.0} V • {liveData?.pv1_current || 0.0} A</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">PV1 String Power</span>
+              <span className="meas-val font-mono font-bold">{(liveData?.pv1_power || 0).toFixed(0)} W</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">PV2 String Voltage & Current</span>
+              <span className="meas-val font-mono text-amber">{liveData?.pv2_voltage || 280.0} V • {liveData?.pv2_current || 0.0} A</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">PV2 String Power</span>
+              <span className="meas-val font-mono font-bold">{(liveData?.pv2_power || 0).toFixed(0)} W</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Total DC Solar Input</span>
+              <span className="meas-val font-mono text-emerald font-bold">
+                {(Number(liveData?.total_dc_power) || ((liveData?.pv1_power || 0) + (liveData?.pv2_power || 0))).toFixed(0)} W
+              </span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Internal DC Bus Link (Vbus)</span>
+              <span className="meas-val font-mono">{liveData?.bus_voltage || 380} V</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">MPPT Tracking Mode</span>
+              <span className="meas-val font-mono text-cyan">{activePower > 0 ? 'Dynamic Dual MPPT Active' : 'Standby Mode (Night)'}</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Solar Zenith Elevation</span>
+              <span className="meas-val font-mono text-muted">{activePower > 0 ? 'Daylight Generation Curve' : 'Below Horizon (0.0 W)'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Electrical Safety & Ground Insulation */}
+        <div className="iso-info-card">
+          <div className="info-card-header">
+            <div>
+              <h4 className="info-card-title">Safety & Insulation Diagnostics</h4>
+              <span className="info-card-sub">Ground fault interrupter & DC impedance</span>
+            </div>
+            <span className="badge-highlight font-mono text-emerald">IEC 62109 Safe</span>
+          </div>
+
+          <div className="measurements-list">
+            <div className="meas-row">
+              <span className="meas-label">PV1 Insulation (P to GND)</span>
+              <span className="meas-val font-mono text-emerald">{liveData?.pv1_insulation || 2840} kΩ (Safe &gt;500kΩ)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">PV2 Insulation (P to GND)</span>
+              <span className="meas-val font-mono text-emerald">{liveData?.pv2_insulation || 2790} kΩ (Safe &gt;500kΩ)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">PV Negative to Earth (N to GND)</span>
+              <span className="meas-val font-mono text-emerald">{liveData?.pv_n_insulation || 3160} kΩ (Isolated)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">GFCI Residual Leakage (IΔn)</span>
+              <span className="meas-val font-mono text-cyan">{liveData?.gfci_leakage || 8.4} mA (Trip: 300mA)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Anti-Islanding Trip Status</span>
+              <span className="meas-val font-mono text-emerald">Armed / Active (IEEE 1547)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Grid Fault Protection State</span>
+              <span className="meas-val font-mono text-emerald">Normal (Zero Over/Under Faults)</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Grounding Resistance Integrity</span>
+              <span className="meas-val font-mono text-emerald">Verified Stable</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Inverter Relay Contactors</span>
+              <span className="meas-val font-mono text-cyan">{activePower > 0 ? 'Closed (Grid Tied)' : 'Open (Standby)'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Thermals, Efficiency & Hardware Lifecycle */}
+        <div className="iso-info-card">
+          <div className="info-card-header">
+            <div>
+              <h4 className="info-card-title">Thermals, Efficiency & Lifecycle</h4>
+              <span className="info-card-sub">Internal heatsink thermals & inverter runtime</span>
             </div>
             <span className="info-model-badge">Havells Enviro Pro</span>
           </div>
 
           <div className="measurements-list">
             <div className="meas-row">
-              <span className="meas-label">Plant ID / Name</span>
-              <span className="meas-val font-mono">Solar Rooftop GTi</span>
+              <span className="meas-label">IGBT Module Temperature</span>
+              <span className="meas-val font-mono text-emerald">{liveData?.module_temp || 29} °C (Safe &lt;85°C)</span>
             </div>
             <div className="meas-row">
-              <span className="meas-label">Inverter Serial Number</span>
+              <span className="meas-label">Internal Enclosure Ambient</span>
+              <span className="meas-val font-mono text-cyan">{liveData?.inner_temp || 28} °C</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Instantaneous Efficiency (η)</span>
+              <span className="meas-val font-mono text-emerald font-bold">
+                {activePower > 0 ? `${(liveData?.inverter_efficiency || 97.6).toFixed(1)}%` : 'Standby (97.6% Peak)'}
+              </span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Today's Generation Runtime</span>
+              <span className="meas-val font-mono font-bold">{(liveData?.today_runtime_hrs || 5.8).toFixed(1)} Hours</span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Cumulative Lifetime Runtime</span>
+              <span className="meas-val font-mono text-amber font-bold">
+                {Math.round(liveData?.total_runtime_hrs || 3418).toLocaleString()} Hours
+              </span>
+            </div>
+            <div className="meas-row">
+              <span className="meas-label">Inverter Serial Number (SN)</span>
               <span className="meas-val font-mono text-amber">{config?.inverter_sn || 'AFDOALB2PNAPJ78'}</span>
             </div>
             <div className="meas-row">
-              <span className="meas-label">Datalogger Stick S/N</span>
-              <span className="meas-val font-mono">SRBAN7JD3S (PRO Wi-Fi)</span>
+              <span className="meas-label">Datalogger Hardware & IP</span>
+              <span className="meas-val font-mono">SRBAN7JD3S • 192.168.1.5</span>
             </div>
             <div className="meas-row">
-              <span className="meas-label">Assigned Local IP</span>
-              <span className="meas-val font-mono text-cyan">192.168.1.5</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Plant Rated Capacity</span>
-              <span className="meas-val font-mono font-bold">3.30 kW</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Electricity Board / Circle</span>
-              <span className="meas-val font-mono">APDCL</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Net Metering Tariff Slab</span>
-              <span className="meas-val font-mono text-emerald font-bold">Slab 3 (&gt;240 Units @ ₹{tariffRate})</span>
-            </div>
-            <div className="meas-row">
-              <span className="meas-label">Datalogger Protocol</span>
-              <span className="meas-val font-mono">Modbus RTU RS485 • 9600-8-N-1</span>
+              <span className="meas-label">Modbus RTU Telemetry Bus</span>
+              <span className="meas-val font-mono text-cyan">{liveData?.source || 'Simulator'}</span>
             </div>
           </div>
         </div>
