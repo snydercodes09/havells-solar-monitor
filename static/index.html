@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Havells Enviro Pro — Local Solar Dashboard (APDCL)</title>
+  <!-- Google Fonts & ApexCharts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+  <style>
+    :root {
+      --bg-dark: #070B14;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(30, 41, 59, 0.85);
+      --accent-amber: #F59E0B;
+      --accent-gold: #FBBF24;
+      --accent-cyan: #06B6D4;
+      --accent-emerald: #10B981;
+      --accent-purple: #8B5CF6;
+      --accent-rose: #F43F5E;
+      --accent-blue: #3B82F6;
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 0%, #172554 0%, #070B14 70%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: 40px;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: -160px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.16) 0%, rgba(6, 182, 212, 0.06) 50%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: var(--card-bg);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-logo-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+    }
+
+    .brand-title h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-title h1 span.model {
+      font-size: 13px;
+      font-weight: 600;
+      padding: 2px 8px;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 6px;
+      color: var(--accent-gold);
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .apdcl-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #60A5FA;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .nav-tab {
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-tab:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .nav-tab.active {
+      color: white;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.25) 100%);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-emerald);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-emerald);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+      color: #000;
+      border: none;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+    }
+
+    /* Tab Content Views */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Cards & Grids */
+    .top-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 22px;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .card-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .card-main-val {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 8px;
+    }
+
+    .card-main-val small {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-left: 4px;
+    }
+
+    .card-subtext {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .text-emerald { color: var(--accent-emerald); }
+    .text-amber { color: var(--accent-amber); }
+    .text-cyan { color: var(--accent-cyan); }
+    .text-purple { color: var(--accent-purple); }
+    .text-blue { color: var(--accent-blue); }
+
+    /* Power Flow Section */
+    .flow-section {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 24px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .flow-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .flow-header h2 {
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .flow-container {
+      width: 100%;
+      height: 240px;
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 40px;
+    }
+
+    .flow-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .flow-wire {
+      stroke: rgba(255, 255, 255, 0.12);
+      stroke-width: 4;
+      fill: none;
+    }
+
+    .flow-particle {
+      stroke-dasharray: 8 16;
+      stroke-linecap: round;
+      animation: flowAnimation 1.2s linear infinite;
+    }
+
+    @keyframes flowAnimation {
+      from { stroke-dashoffset: 48; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .flow-node {
+      position: relative;
+      z-index: 2;
+      width: 180px;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s ease;
+    }
+
+    .flow-node:hover {
+      transform: translateY(-3px) scale(1.02);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .flow-node-icon { font-size: 32px; margin-bottom: 6px; }
+    .flow-node-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
+    .flow-node-val { font-size: 20px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .flow-node-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Middle Layout Grid */
+    .middle-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .middle-grid { grid-template-columns: 1fr; }
+      .flow-container {
+        flex-direction: column;
+        height: auto;
+        gap: 25px;
+        padding: 20px 0;
+      }
+      .flow-svg { display: none; }
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .string-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .string-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .string-val-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .string-val-row span:last-child {
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* APDCL Financial Breakdown Section */
+    .apdcl-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .slab-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    .slab-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .slab-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 13px;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    }
+
+    .slab-item:last-child { border-bottom: none; }
+
+    .badge-highlight {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--accent-emerald);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* History Table View */
+    .history-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .history-btn-group {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 3px;
+    }
+
+    .hist-filter-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .hist-filter-btn.active {
+      background: var(--accent-amber);
+      color: black;
+      font-weight: 700;
+    }
+
+    .table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    table.data-table th {
+      background: rgba(30, 41, 59, 0.7);
+      padding: 12px 16px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+
+    table.data-table td {
+      padding: 14px 16px;
+      border-top: 1px solid var(--card-border);
+      color: var(--text-primary);
+    }
+
+    table.data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-box {
+      background: #0F172A;
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      width: 90%;
+      max-width: 520px;
+      padding: 28px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 { font-size: 18px; font-weight: 700; }
+    .close-modal { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      outline: none;
+    }
+    .form-control:focus { border-color: var(--accent-amber); }
+
+    .toggle-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+    }
+
+    .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155; transition: .3s; border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px;
+      background-color: white; transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--accent-amber); }
+    input:checked + .slider:before { transform: translateX(22px); }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand-section">
+        <div class="brand-logo-badge">H</div>
+        <div class="brand-title">
+          <h1>Havells Enviro Pro <span class="model">GTi 3.3kW</span></h1>
+          <p>
+            <span class="apdcl-badge">⚡ APDCL Solar</span>
+            <span>Inverter S/N: <strong id="hdr-sn" style="color:var(--text-primary); font-family:'JetBrains Mono'">AFDOALB2PNAPJ78</strong></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-live">⚡ Live Monitor</button>
+        <button class="nav-tab" data-tab="tab-apdcl">💰 APDCL Billing</button>
+        <button class="nav-tab" data-tab="tab-history">📊 Persistent History</button>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-pill" id="live-pill">
+          <div class="pulse-dot"></div>
+          <span id="conn-status">LIVE (1 Hz)</span>
+        </div>
+        <button class="btn" id="open-settings-btn">⚙️ Settings</button>
+      </div>
+    </header>
+
+    <!-- Top KPI Row (Always Visible) -->
+    <div class="top-metrics-grid">
+      <!-- Active Power -->
+      <div class="card" style="border-top: 3px solid var(--accent-gold);">
+        <div class="card-top-header">
+          <span class="card-label">Active Generation</span>
+          <div class="card-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-gold);">⚡</div>
+        </div>
+        <div class="card-main-val text-amber" id="card-active-power">3,120 <small>W</small></div>
+        <div class="card-subtext">
+          <span>Inverter Output</span> • <span class="text-emerald" id="card-efficiency">97.6% Eff.</span>
+        </div>
+      </div>
+
+      <!-- Today Energy -->
+      <div class="card" style="border-top: 3px solid var(--accent-emerald);">
+        <div class="card-top-header">
+          <span class="card-label">Today's Generation</span>
+          <div class="card-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald);">☀️</div>
+        </div>
+        <div class="card-main-val text-emerald" id="card-today-energy">14.85 <small>kWh</small></div>
+        <div class="card-subtext">
+          <span>Solar Sunlight</span> • <span id="card-progress">5.8 Peak Sun Hrs</span>
+        </div>
+      </div>
+
+      <!-- Today Savings (APDCL Aligned) -->
+      <div class="card" style="border-top: 3px solid var(--accent-cyan);">
+        <div class="card-top-header">
+          <span class="card-label">Today's APDCL Savings</span>
+          <div class="card-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan);">₹</div>
+        </div>
+        <div class="card-main-val text-cyan" id="card-today-savings">₹ 113.60</div>
+        <div class="card-subtext">
+          <span>APDCL Rate: <strong id="card-tariff">₹7.65</strong>/unit</span>
+        </div>
+      </div>
+
+      <!-- Month Savings (APDCL Aligned) -->
+      <div class="card" style="border-top: 3px solid var(--accent-blue);">
+        <div class="card-top-header">
+          <span class="card-label">This Month's Bill Offset</span>
+          <div class="card-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue);">📉</div>
+        </div>
+        <div class="card-main-val text-blue" id="card-month-savings">₹ 3,442.50</div>
+        <div class="card-subtext">
+          <span id="card-month-kwh">450 kWh Generated</span> • <span class="text-emerald">Net Metered</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 1: LIVE MONITOR ==================== -->
+    <div id="tab-live" class="tab-content active">
+      <!-- Power Flow Section -->
+      <div class="flow-section">
+        <div class="flow-header">
+          <h2>⚡ Live Animated Power Flow Telemetry</h2>
+          <span style="font-size: 13px; color: var(--text-muted);" id="flow-mode-text">Local Direct RS485 / Live Engine</span>
+        </div>
+        
+        <div class="flow-container">
+          <svg class="flow-svg" viewBox="0 0 1000 240" preserveAspectRatio="none">
+            <!-- Solar to Inverter -->
+            <line x1="160" y1="120" x2="350" y2="120" class="flow-wire" />
+            <line x1="160" y1="120" x2="350" y2="120" class="flow-wire flow-particle" stroke="#F59E0B" stroke-width="5" id="particle-solar" />
+
+            <!-- Inverter to Home -->
+            <path d="M 490 100 Q 560 50, 680 70" class="flow-wire" />
+            <path d="M 490 100 Q 560 50, 680 70" class="flow-wire flow-particle" stroke="#38BDF8" stroke-width="4" id="particle-home" />
+
+            <!-- Inverter to Grid -->
+            <path d="M 490 140 Q 560 190, 830 150" class="flow-wire" />
+            <path d="M 490 140 Q 560 190, 830 150" class="flow-wire flow-particle" stroke="#10B981" stroke-width="5" id="particle-grid" />
+          </svg>
+
+          <!-- Node 1: Solar PV -->
+          <div class="flow-node" style="border-color: rgba(245, 158, 11, 0.4);">
+            <div class="flow-node-icon">☀️</div>
+            <div class="flow-node-title">Solar Arrays</div>
+            <div class="flow-node-val text-amber" id="node-solar-val">3,198 W</div>
+            <div class="flow-node-sub" id="node-solar-sub">PV1: 1620W • PV2: 1578W</div>
+          </div>
+
+          <!-- Node 2: Havells Inverter -->
+          <div class="flow-node" style="border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 25px rgba(239, 68, 68, 0.15);">
+            <div class="flow-node-icon">⚡</div>
+            <div class="flow-node-title">Havells GTi</div>
+            <div class="flow-node-val" id="node-inv-val" style="color: #F87171;">3,120 W</div>
+            <div class="flow-node-sub" id="node-inv-sub">IGBT Temp: 44.5°C</div>
+          </div>
+
+          <!-- Node 3: Home Consumption -->
+          <div class="flow-node" style="border-color: rgba(56, 189, 248, 0.4);">
+            <div class="flow-node-icon">🏠</div>
+            <div class="flow-node-title">Home Load</div>
+            <div class="flow-node-val text-cyan" id="node-home-val">680 W</div>
+            <div class="flow-node-sub">Direct Solar Use</div>
+          </div>
+
+          <!-- Node 4: APDCL Grid -->
+          <div class="flow-node" style="border-color: rgba(16, 185, 129, 0.4);">
+            <div class="flow-node-icon">🌐</div>
+            <div class="flow-node-title">APDCL Grid Export</div>
+            <div class="flow-node-val text-emerald" id="node-grid-val">2,440 W</div>
+            <div class="flow-node-sub" id="node-grid-sub">231.2V • 50.01 Hz</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Section: Today's Curve + String Telemetry -->
+      <div class="middle-grid">
+        <div class="card">
+          <div class="card-top-header">
+            <span class="card-label">Today's Generation Profile (Watts vs Time)</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Real-time Telemetry Curve</span>
+          </div>
+          <div id="chart-today-curve" style="min-height: 280px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-top-header">
+            <span class="card-label">Dual String MPPT Telemetry</span>
+            <span class="badge-highlight">Dual MPPT</span>
+          </div>
+          
+          <div class="details-grid">
+            <div class="string-box">
+              <div class="string-header">
+                <span>STRING 1</span>
+                <span class="text-amber" id="str1-power">1620 W</span>
+              </div>
+              <div class="string-val-row"><span style="color:var(--text-muted)">Voltage:</span><span id="str1-v">285.4 V</span></div>
+              <div class="string-val-row"><span style="color:var(--text-muted)">Current:</span><span id="str1-i">5.68 A</span></div>
+            </div>
+
+            <div class="string-box">
+              <div class="string-header">
+                <span>STRING 2</span>
+                <span class="text-amber" id="str2-power">1578 W</span>
+              </div>
+              <div class="string-val-row"><span style="color:var(--text-muted)">Voltage:</span><span id="str2-v">281.2 V</span></div>
+              <div class="string-val-row"><span style="color:var(--text-muted)">Current:</span><span id="str2-i">5.61 A</span></div>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px; border-top: 1px solid var(--card-border); padding-top: 14px;">
+            <div class="card-label" style="font-size: 11px; margin-bottom: 8px;">Grid Stability & Inverter Health</div>
+            <div class="string-val-row"><span style="color:var(--text-muted)">AC Line Voltage:</span><span id="diag-grid">231.5 V • 13.5 A</span></div>
+            <div class="string-val-row"><span style="color:var(--text-muted)">Grid Frequency:</span><span id="diag-freq">50.02 Hz</span></div>
+            <div class="string-val-row"><span style="color:var(--text-muted)">Inverter Temp:</span><span id="diag-temp" class="text-emerald">44.0 °C (Normal)</span></div>
+            <div class="string-val-row"><span style="color:var(--text-muted)">Internal Bus Voltage:</span><span id="diag-bus">382 V</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 2: APDCL BILLING ==================== -->
+    <div id="tab-apdcl" class="tab-content">
+      <div class="apdcl-grid">
+        <!-- APDCL Tariff Slabs -->
+        <div class="slab-card">
+          <div class="slab-header">
+            <span>⚡ APDCL LT-II Domestic Tariff Slabs</span>
+            <span class="apdcl-badge">APDCL</span>
+          </div>
+          <div class="slab-item">
+            <div>
+              <strong>Slab 1: 0 – 120 Units/Mo</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">Baseline household allowance</div>
+            </div>
+            <span style="font-weight: 700; color: var(--text-secondary)">₹ 5.30 / unit</span>
+          </div>
+          <div class="slab-item">
+            <div>
+              <strong>Slab 2: 121 – 240 Units/Mo</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">Standard residential tier</div>
+            </div>
+            <span style="font-weight: 700; color: var(--text-secondary)">₹ 6.60 / unit</span>
+          </div>
+          <div class="slab-item" style="background: rgba(16, 185, 129, 0.08); padding: 10px; border-radius: 8px; border-left: 3px solid var(--accent-emerald);">
+            <div>
+              <strong class="text-emerald">Slab 3: Above 240 Units/Mo</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">Top tier displaced by your Solar System!</div>
+            </div>
+            <span style="font-weight: 800; color: var(--accent-emerald)">₹ 7.65 / unit</span>
+          </div>
+          <div style="margin-top: 14px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+            * Effective rate includes basic energy charge, FPPPA (Fuel Price Adjustment), and electricity duty applicable across APDCL.
+          </div>
+        </div>
+
+        <!-- Net Metering Offset Simulator -->
+        <div class="slab-card">
+          <div class="slab-header">
+            <span>📊 Rooftop Net-Metering Impact</span>
+            <span class="badge-highlight">1:1 Bi-Directional</span>
+          </div>
+          <div class="slab-item">
+            <span>Daily Average Solar Generation:</span>
+            <strong id="apdcl-daily-avg">14.8 kWh / day</strong>
+          </div>
+          <div class="slab-item">
+            <span>Monthly Expected Solar Yield:</span>
+            <strong id="apdcl-monthly-kwh">445 kWh / month</strong>
+          </div>
+          <div class="slab-item">
+            <span>Typical Household Bill Without Solar:</span>
+            <span style="color: #F87171; font-weight:700;">₹ 3,850 / month</span>
+          </div>
+          <div class="slab-item">
+            <span>Estimated APDCL Bill With Havells Solar:</span>
+            <span style="color: var(--accent-emerald); font-weight:800; font-size: 15px;">₹ 407 / month</span>
+          </div>
+          <div class="slab-item" style="border-top: 1px solid var(--card-border); margin-top: 8px; padding-top: 10px;">
+            <span>Monthly Cash Savings in Pocket:</span>
+            <strong class="text-emerald" style="font-size: 17px;" id="apdcl-monthly-savings">₹ 3,443 / mo</strong>
+          </div>
+        </div>
+
+        <!-- Lifetime & Environmental Returns in Assam -->
+        <div class="slab-card">
+          <div class="slab-header">
+            <span>🌱 Lifetime Returns in APDCL</span>
+            <span style="color:var(--accent-purple); font-weight:700;">Cumulative</span>
+          </div>
+          <div class="slab-item">
+            <span>Total Units Generated:</span>
+            <strong id="apdcl-life-kwh">4,834 kWh</strong>
+          </div>
+          <div class="slab-item">
+            <span>Total APDCL Electric Bill Offset:</span>
+            <strong class="text-cyan" style="font-size: 16px;" id="apdcl-life-savings">₹ 36,980</strong>
+          </div>
+          <div class="slab-item">
+            <span>Clean Energy Equivalent:</span>
+            <span id="apdcl-life-co2">3,964 kg CO₂ avoided</span>
+          </div>
+          <div class="slab-item">
+            <span>Forest Equivalent:</span>
+            <span id="apdcl-life-trees">🌲 182 Trees Planted</span>
+          </div>
+          <div class="slab-item">
+            <span>Estimated Rooftop Payback Progress:</span>
+            <strong class="text-amber">~32% of Capital Cost Recovered</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TAB 3: PERSISTENT HISTORY ==================== -->
+    <div id="tab-history" class="tab-content">
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="history-controls">
+          <div>
+            <span class="card-label">Production & APDCL Savings History</span>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Stored permanently in local SQLite database</div>
+          </div>
+          <div class="history-btn-group">
+            <button class="hist-filter-btn active" data-period="7">7 Days</button>
+            <button class="hist-filter-btn" data-period="30">30 Days</button>
+            <button class="hist-filter-btn" data-period="monthly">Monthly Overview</button>
+          </div>
+        </div>
+
+        <div id="chart-persistent-history" style="min-height: 300px;"></div>
+      </div>
+
+      <!-- Persistent History Data Table -->
+      <div class="card">
+        <div class="history-controls">
+          <span class="card-label">Detailed Daily Log Records</span>
+          <input type="text" id="table-search" placeholder="Filter by date (YYYY-MM)..." class="form-control" style="width: 240px; padding: 6px 12px; font-size: 12px;">
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Energy (kWh)</th>
+                <th>Peak Power</th>
+                <th>Sun Hours</th>
+                <th>APDCL Tariff Tier</th>
+                <th>Money Saved (₹)</th>
+                <th>CO₂ Avoided</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <!-- Dynamically populated from SQLite -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>⚙️ Telemetry & System Settings</h3>
+        <button class="close-modal" id="close-settings-btn">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Electricity Tariff Rate (₹ per kWh) — APDCL</label>
+        <input type="number" step="0.05" id="input-tariff" class="form-control" value="7.65">
+        <small style="color:var(--text-muted); font-size: 11px; margin-top:4px; display:block;">Current APDCL LT-II Top Slab + Duties: ₹7.65/unit.</small>
+      </div>
+
+      <div class="form-group">
+        <div class="toggle-wrapper">
+          <div>
+            <div style="font-size:14px; font-weight:600;">Simulation Fallback Mode</div>
+            <div style="font-size:12px; color:var(--text-muted);">Generates zenith solar curve when hardware RS485 is unplugged.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="check-sim" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Select RS485 Serial Port (COM)</label>
+        <select id="select-com-port" class="form-control">
+          <option value="">-- No Direct Serial COM Selected --</option>
+        </select>
+        <small style="color:var(--text-muted); font-size: 11px; margin-top:4px; display:block;">Plug in USB-to-RS485 adapter to select.</small>
+      </div>
+
+      <div style="display:flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+        <button class="btn" id="btn-cancel-settings">Cancel</button>
+        <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    let todayCurveChart = null;
+    let historyChart = null;
+    let tariffRate = 7.65;
+    let dailyHistoryData = [];
+    let monthlyHistoryData = [];
+
+    // --- TAB SWITCHING ---
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const targetId = tab.getAttribute('data-tab');
+        document.getElementById(targetId).classList.add('active');
+
+        // Trigger chart resize if history tab opened
+        if (targetId === 'tab-history' && historyChart) {
+          setTimeout(() => historyChart.render(), 100);
+        }
+      });
+    });
+
+    // --- CHART INITIALIZATION ---
+    function initCharts() {
+      // 1. Today Curve (Tab 1)
+      const curveOptions = {
+        series: [{ name: 'Generation (W)', data: [] }],
+        chart: {
+          type: 'area',
+          height: 280,
+          background: 'transparent',
+          toolbar: { show: false },
+          animations: { enabled: true, easing: 'easeinout', speed: 800 }
+        },
+        colors: ['#F59E0B'],
+        fill: {
+          type: 'gradient',
+          gradient: { shadeIntensity: 1, opacityFrom: 0.55, opacityTo: 0.05, stops: [0, 95, 100] }
+        },
+        stroke: { curve: 'smooth', width: 3 },
+        dataLabels: { enabled: false },
+        xaxis: {
+          categories: [],
+          labels: { style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans' } },
+          axisBorder: { show: false },
+          axisTicks: { show: false }
+        },
+        yaxis: {
+          labels: {
+            style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans' },
+            formatter: val => val.toFixed(0) + ' W'
+          }
+        },
+        grid: { borderColor: 'rgba(255, 255, 255, 0.05)', strokeDashArray: 4 },
+        tooltip: { theme: 'dark', y: { formatter: val => val + ' W' } }
+      };
+      todayCurveChart = new ApexCharts(document.querySelector("#chart-today-curve"), curveOptions);
+      todayCurveChart.render();
+
+      // 2. Persistent History Chart (Tab 3)
+      const histOptions = {
+        series: [
+          { name: 'Energy (kWh)', type: 'column', data: [] },
+          { name: 'APDCL Savings (₹)', type: 'line', data: [] }
+        ],
+        chart: {
+          height: 300,
+          type: 'line',
+          background: 'transparent',
+          toolbar: { show: false }
+        },
+        colors: ['#10B981', '#06B6D4'],
+        plotOptions: { bar: { columnWidth: '45%', borderRadius: 6 } },
+        stroke: { width: [0, 3], curve: 'smooth' },
+        dataLabels: { enabled: false },
+        xaxis: {
+          categories: [],
+          labels: { style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans' } }
+        },
+        yaxis: [
+          {
+            title: { text: 'Energy (kWh)', style: { color: '#10B981' } },
+            labels: { style: { colors: '#64748B' }, formatter: val => val ? val.toFixed(1) : '0' }
+          },
+          {
+            opposite: true,
+            title: { text: 'Savings (₹)', style: { color: '#06B6D4' } },
+            labels: { style: { colors: '#64748B' }, formatter: val => val ? '₹' + Math.round(val) : '0' }
+          }
+        ],
+        grid: { borderColor: 'rgba(255, 255, 255, 0.05)', strokeDashArray: 4 },
+        tooltip: { theme: 'dark' }
+      };
+      historyChart = new ApexCharts(document.querySelector("#chart-persistent-history"), histOptions);
+      historyChart.render();
+    }
+
+    // --- FETCH DATA & POPULATE UI ---
+    async function loadData() {
+      try {
+        // Today curve
+        const todayRes = await fetch('/api/history/today');
+        const todayData = await todayRes.json();
+        if (todayData && todayData.length > 0) {
+          todayCurveChart.updateOptions({
+            xaxis: { categories: todayData.map(d => d.time_slot) },
+            series: [{ name: 'Generation (W)', data: todayData.map(d => d.avg_power) }]
+          });
+        }
+
+        // Daily history (30 days)
+        const dailyRes = await fetch('/api/history/daily?days=30');
+        dailyHistoryData = await dailyRes.json();
+        renderHistoryChart(7); // default 7 days
+        renderHistoryTable(dailyHistoryData);
+
+        // Monthly history
+        const monthRes = await fetch('/api/history/monthly');
+        monthlyHistoryData = await monthRes.json();
+
+        // Overall summary & APDCL stats
+        const sumRes = await fetch('/api/metrics/summary');
+        const sumData = await sumRes.json();
+        document.getElementById('card-month-savings').innerText = `₹ ${sumData.month_earnings.toLocaleString('en-IN')}`;
+        document.getElementById('card-month-kwh').innerText = `${sumData.month_kwh} kWh Generated`;
+        document.getElementById('apdcl-monthly-kwh').innerText = `${sumData.month_kwh} kWh / month`;
+        document.getElementById('apdcl-monthly-savings').innerText = `₹ ${sumData.month_earnings.toLocaleString('en-IN')} / mo`;
+        document.getElementById('apdcl-life-kwh').innerText = `${sumData.lifetime_kwh.toLocaleString('en-IN')} kWh`;
+        document.getElementById('apdcl-life-savings').innerText = `₹ ${sumData.lifetime_earnings.toLocaleString('en-IN')}`;
+        document.getElementById('apdcl-life-co2').innerText = `${sumData.lifetime_co2_kg.toLocaleString('en-IN')} kg CO₂ avoided`;
+        document.getElementById('apdcl-life-trees').innerText = `🌲 ${sumData.trees_equivalent} Trees Planted`;
+
+        // Config
+        const cfgRes = await fetch('/api/config');
+        const cfg = await cfgRes.json();
+        tariffRate = cfg.tariff_rate || 7.65;
+        document.getElementById('card-tariff').innerText = `₹${tariffRate.toFixed(2)}`;
+        document.getElementById('input-tariff').value = tariffRate;
+        document.getElementById('check-sim').checked = cfg.simulation_mode;
+
+        // COM Ports
+        const portsRes = await fetch('/api/ports');
+        const ports = await portsRes.json();
+        const sel = document.getElementById('select-com-port');
+        sel.innerHTML = '<option value="">-- No Direct Serial COM Selected --</option>';
+        ports.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.device;
+          opt.innerText = `${p.device} (${p.description})`;
+          if (p.device === cfg.selected_com_port) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        console.error('Error loading data:', e);
+      }
+    }
+
+    // --- RENDER HISTORY CHART ---
+    function renderHistoryChart(period) {
+      if (period === 'monthly') {
+        const labels = monthlyHistoryData.map(d => d.month);
+        const kwhs = monthlyHistoryData.map(d => d.monthly_kwh);
+        const savings = monthlyHistoryData.map(d => d.monthly_savings);
+        historyChart.updateOptions({
+          xaxis: { categories: labels },
+          series: [
+            { name: 'Energy (kWh)', type: 'column', data: kwhs },
+            { name: 'APDCL Savings (₹)', type: 'line', data: savings }
+          ]
+        });
+      } else {
+        const count = parseInt(period);
+        const slice = dailyHistoryData.slice(-count);
+        const labels = slice.map(d => d.date.slice(5)); // MM-DD
+        const kwhs = slice.map(d => d.energy_kwh);
+        const savings = slice.map(d => d.earnings_inr);
+        historyChart.updateOptions({
+          xaxis: { categories: labels },
+          series: [
+            { name: 'Energy (kWh)', type: 'column', data: kwhs },
+            { name: 'APDCL Savings (₹)', type: 'line', data: savings }
+          ]
+        });
+      }
+    }
+
+    // --- RENDER TABLE ---
+    function renderHistoryTable(data) {
+      const tbody = document.getElementById('history-tbody');
+      tbody.innerHTML = '';
+      data.slice().reverse().forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${row.date}</strong></td>
+          <td><span style="color:var(--accent-emerald); font-weight:700;">${row.energy_kwh}</span> kWh</td>
+          <td>${row.peak_power} W</td>
+          <td>${row.sunlight_hours} hrs</td>
+          <td><span class="badge-highlight" style="font-size:10px;">${row.apdcl_slab_offset || 'Slab 3: >240 Units'}</span></td>
+          <td style="color:var(--accent-cyan); font-weight:700;">₹ ${row.earnings_inr.toFixed(2)}</td>
+          <td>${row.co2_saved_kg} kg</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Table search filter
+    document.getElementById('table-search').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filtered = dailyHistoryData.filter(d => d.date.toLowerCase().includes(q));
+      renderHistoryTable(filtered);
+    });
+
+    // History Period Buttons
+    document.querySelectorAll('.hist-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.hist-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const period = btn.getAttribute('data-period');
+        renderHistoryChart(period);
+      });
+    });
+
+    // --- WEBSOCKET LIVE STREAMING ---
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws/live`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById('conn-status').innerText = 'LIVE (1 Hz)';
+        document.getElementById('conn-status').className = 'text-emerald';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data);
+          updateLiveMetrics(d);
+        } catch (e) {
+          console.error('WS Error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('conn-status').innerText = 'RECONNECTING...';
+        document.getElementById('conn-status').className = 'text-amber';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    // --- UPDATE LIVE METRICS ---
+    function updateLiveMetrics(d) {
+      const pwr = Math.round(d.active_power).toLocaleString();
+      document.getElementById('card-active-power').innerHTML = `${pwr} <small>W</small>`;
+      document.getElementById('card-today-energy').innerHTML = `${d.today_energy.toFixed(2)} <small>kWh</small>`;
+      
+      const earnings = (d.today_energy * tariffRate).toFixed(2);
+      document.getElementById('card-today-savings').innerText = `₹ ${earnings}`;
+
+      // Inverter Eff
+      const totalDc = d.pv1_power + d.pv2_power;
+      const eff = totalDc > 0 ? Math.min(98.8, ((d.active_power / totalDc) * 100)).toFixed(1) : 0.0;
+      document.getElementById('card-efficiency').innerText = `${eff}% Eff.`;
+
+      // Flow Node values
+      document.getElementById('node-solar-val').innerText = `${Math.round(totalDc).toLocaleString()} W`;
+      document.getElementById('node-solar-sub').innerText = `PV1: ${Math.round(d.pv1_power)}W • PV2: ${Math.round(d.pv2_power)}W`;
+      document.getElementById('node-inv-val').innerText = `${pwr} W`;
+      document.getElementById('node-inv-sub').innerText = `IGBT Temp: ${d.module_temp}°C`;
+
+      const homeLoad = Math.min(d.active_power, 650 + Math.round((Math.sin(Date.now() / 5000) * 80)));
+      const gridExport = Math.max(0, d.active_power - homeLoad);
+      document.getElementById('node-home-val').innerText = `${Math.round(homeLoad)} W`;
+      document.getElementById('node-grid-val').innerText = `${Math.round(gridExport).toLocaleString()} W`;
+      document.getElementById('node-grid-sub').innerText = `${d.grid_voltage}V • ${d.grid_frequency} Hz`;
+
+      // Strings
+      document.getElementById('str1-power').innerText = `${Math.round(d.pv1_power)} W`;
+      document.getElementById('str1-v').innerText = `${d.pv1_voltage} V`;
+      document.getElementById('str1-i').innerText = `${d.pv1_current} A`;
+      document.getElementById('str2-power').innerText = `${Math.round(d.pv2_power)} W`;
+      document.getElementById('str2-v').innerText = `${d.pv2_voltage} V`;
+      document.getElementById('str2-i').innerText = `${d.pv2_current} A`;
+
+      // Diagnostics
+      document.getElementById('diag-grid').innerText = `${d.grid_voltage} V • ${d.grid_current} A`;
+      document.getElementById('diag-freq').innerText = `${d.grid_frequency} Hz`;
+      document.getElementById('diag-temp').innerText = `${d.module_temp} °C (${d.module_temp < 60 ? 'Normal' : 'High'})`;
+      document.getElementById('diag-bus').innerText = `${d.bus_voltage} V`;
+
+      // Flow particles speed
+      const solarParticle = document.getElementById('particle-solar');
+      const gridParticle = document.getElementById('particle-grid');
+      if (solarParticle) {
+        const speed = d.active_power > 0 ? Math.max(0.4, 2.5 - (d.active_power / 2000)) : 0;
+        solarParticle.style.animationDuration = `${speed}s`;
+        if (gridParticle) gridParticle.style.animationDuration = `${speed}s`;
+      }
+    }
+
+    // Modal
+    const modal = document.getElementById('settings-modal');
+    document.getElementById('open-settings-btn').onclick = () => modal.classList.add('active');
+    document.getElementById('close-settings-btn').onclick = () => modal.classList.remove('active');
+    document.getElementById('btn-cancel-settings').onclick = () => modal.classList.remove('active');
+
+    document.getElementById('btn-save-settings').onclick = async () => {
+      const tariff = parseFloat(document.getElementById('input-tariff').value) || 7.65;
+      const sim = document.getElementById('check-sim').checked;
+      const port = document.getElementById('select-com-port').value;
+
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tariff_rate: tariff,
+          simulation_mode: sim,
+          selected_com_port: port
+        })
+      });
+
+      tariffRate = tariff;
+      document.getElementById('card-tariff').innerText = `₹${tariff.toFixed(2)}`;
+      modal.classList.remove('active');
+      loadData();
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initCharts();
+      loadData();
+      connectWebSocket();
+    });
+  </script>
+</body>
+</html>
