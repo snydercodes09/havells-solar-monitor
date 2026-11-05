@@ -26,19 +26,29 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
   const pv2Power = Math.round(Number(liveData?.pv2_power) || 0);
   const totalDc = pv1Power + pv2Power;
 
-  // Realistic dynamic household load simulation (~650W baseline)
-  const homeLoad = Math.min(activePower, 650 + Math.round(Math.sin(Date.now() / 4000) * 60));
-  const gridExport = Math.max(0, activePower - homeLoad);
+  // Dynamic residential household consumption profile (evening lights/fans ~880W, morning ~750W, daytime ~550W, night ~420W)
+  const currentHour = new Date().getHours() + new Date().getMinutes() / 60;
+  const defaultBaseLoad = (currentHour >= 17 && currentHour < 23) ? 880 : (currentHour >= 6 && currentHour < 9) ? 750 : (currentHour >= 9 && currentHour < 17) ? 550 : 420;
+  const fallbackHomeLoad = Math.round(defaultBaseLoad + Math.sin(Date.now() / 3000) * 25);
+
+  const homeLoad = liveData?.home_load !== undefined ? Math.round(Number(liveData.home_load)) : fallbackHomeLoad;
+  const gridImport = liveData?.grid_import !== undefined ? Math.round(Number(liveData.grid_import)) : Math.max(0, homeLoad - activePower);
+  const gridExport = liveData?.grid_export !== undefined ? Math.round(Number(liveData.grid_export)) : Math.max(0, activePower - homeLoad);
+
   const tariffRate = Number(config?.tariff_rate) || 7.65;
-  const todayKwh = Number(summary?.today_kwh) || Number(liveData?.today_kwh) || 12.8;
+  const todayKwh = Number(summary?.today_kwh) || Number(liveData?.today_kwh) || 14.85;
   const todaySavings = Math.round(todayKwh * tariffRate);
 
   // Speed of animated energy particles
-  const particleSpeed = activePower > 0 ? Math.max(0.6, 2.8 - (activePower / 1600)) : 0;
-  const particleStyle = particleSpeed > 0 ? { animationDuration: `${particleSpeed}s` } : { display: 'none' };
+  const solarParticleStyle = activePower > 0 ? { animationDuration: `${Math.max(0.6, 2.8 - (activePower / 1600))}s` } : { display: 'none' };
+  const gridExportParticleStyle = gridExport > 0 ? { animationDuration: `${Math.max(0.7, 2.5 - (gridExport / 1500))}s` } : { display: 'none' };
+  const gridImportParticleStyle = gridImport > 0 ? { animationDuration: `${Math.max(0.7, 2.5 - (gridImport / 1000))}s` } : { display: 'none' };
+  const houseParticleStyle = homeLoad > 0 ? { animationDuration: `${Math.max(0.8, 2.5 - (homeLoad / 1000))}s` } : { display: 'none' };
 
-  // Calculate home load progress percentage (relative to solar power)
-  const loadPercentage = activePower > 0 ? Math.min(100, Math.round((homeLoad / activePower) * 100)) : 100;
+  // Calculate home load progress percentage
+  const loadPercentage = activePower > 0
+    ? Math.min(100, Math.round((homeLoad / activePower) * 100))
+    : Math.min(100, Math.round((homeLoad / 1500) * 100));
 
   return (
     <div className="iso-dashboard-container">
@@ -54,8 +64,8 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
           </div>
           <div className="metric-value-row">
             <span className="metric-big-val">{(homeLoad / 1000).toFixed(1)} <small>kW</small></span>
-            <span className="metric-trend-badge text-emerald">
-              <ArrowUpRight size={14} />
+            <span className={`metric-trend-badge ${gridImport > 0 ? 'text-amber' : 'text-emerald'}`}>
+              {gridImport > 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
             </span>
           </div>
           <div className="metric-progress-track">
@@ -66,7 +76,7 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
           </div>
           <div className="metric-footer-row">
             <span className="metric-footer-val">{(todayKwh * 0.38).toFixed(1)} kWh</span>
-            <span className="metric-footer-label">Daily use</span>
+            <span className="metric-footer-label">{gridImport > 0 ? 'Grid Powered' : 'Solar Powered'}</span>
           </div>
         </div>
 
@@ -141,17 +151,21 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
           <div className="metric-header-row">
             <span className="metric-card-title">APDCL Grid</span>
             <div className="metric-card-icon-pill">
-              <Zap size={18} className="text-emerald" />
+              <Zap size={18} className={gridImport > 0 ? "text-amber" : (gridExport > 0 ? "text-emerald" : "text-muted")} />
             </div>
           </div>
           <div className="metric-value-row">
             <div className="grid-sub-rates">
-              <span className="grid-rate-item">
-                <strong>0.0 <small>kW</small></strong>
+              <span className={`grid-rate-item ${gridImport > 0 ? 'active-grid-in' : ''}`}>
+                <strong className={gridImport > 0 ? 'text-amber' : ''}>
+                  {(gridImport / 1000).toFixed(1)} <small>kW</small>
+                </strong>
                 <span>import</span>
               </span>
-              <span className="grid-rate-item">
-                <strong className="text-emerald">{(gridExport / 1000).toFixed(1)} <small>kW</small></strong>
+              <span className={`grid-rate-item ${gridExport > 0 ? 'active-grid-out' : ''}`}>
+                <strong className={gridExport > 0 ? 'text-emerald' : ''}>
+                  {(gridExport / 1000).toFixed(1)} <small>kW</small>
+                </strong>
                 <span>export</span>
               </span>
             </div>
@@ -234,37 +248,51 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
               {/* ===== 1. ISOMETRIC CONDUITS (WIRES) ===== */}
               {/* Wire 1: Solar Array (240, 200) -> Havells Inverter (480, 250) */}
               <line x1="240" y1="200" x2="480" y2="250" className="iso-conduit-bg" />
-              <line
-                x1="240" y1="200" x2="480" y2="250"
-                className="iso-conduit-flow flow-amber"
-                style={particleStyle}
-                filter="url(#glowLaserAmber)"
-              />
+              {activePower > 0 && (
+                <line
+                  x1="240" y1="200" x2="480" y2="250"
+                  className="iso-conduit-flow flow-amber"
+                  style={solarParticleStyle}
+                  filter="url(#glowLaserAmber)"
+                />
+              )}
 
-              {/* Wire 2: Havells Inverter (480, 250) -> Grid Pylon (730, 200) */}
+              {/* Wire 2: Inverter / Switchboard (480, 250) <-> Grid Pylon (730, 200) */}
               <line x1="480" y1="250" x2="730" y2="200" className="iso-conduit-bg" />
-              <line
-                x1="480" y1="250" x2="730" y2="200"
-                className="iso-conduit-flow flow-emerald"
-                style={particleStyle}
-                filter="url(#glowLaserGreen)"
-              />
+              {gridExport > 0 && (
+                <line
+                  x1="480" y1="250" x2="730" y2="200"
+                  className="iso-conduit-flow flow-emerald"
+                  style={gridExportParticleStyle}
+                  filter="url(#glowLaserGreen)"
+                />
+              )}
+              {gridImport > 0 && (
+                <line
+                  x1="730" y1="200" x2="480" y2="250"
+                  className="iso-conduit-flow flow-amber"
+                  style={gridImportParticleStyle}
+                  filter="url(#glowLaserAmber)"
+                />
+              )}
 
-              {/* Wire 3: Havells Inverter (480, 250) -> House (680, 390) */}
+              {/* Wire 3: Central Point (480, 250) -> House (680, 390) */}
               <line x1="480" y1="250" x2="680" y2="390" className="iso-conduit-bg" />
-              <line
-                x1="480" y1="250" x2="680" y2="390"
-                className="iso-conduit-flow flow-cyan"
-                style={particleStyle}
-                filter="url(#glowLaserCyan)"
-              />
+              {homeLoad > 0 && (
+                <line
+                  x1="480" y1="250" x2="680" y2="390"
+                  className="iso-conduit-flow flow-cyan"
+                  style={houseParticleStyle}
+                  filter="url(#glowLaserCyan)"
+                />
+              )}
 
               {/* Wire 4: Havells Inverter (480, 250) -> Monitoring Hub (300, 380) */}
               <line x1="480" y1="250" x2="300" y2="380" className="iso-conduit-bg" />
               <line
                 x1="480" y1="250" x2="300" y2="380"
                 className="iso-conduit-flow flow-rose"
-                style={particleStyle}
+                style={{ animationDuration: '2.5s' }}
               />
 
               {/* ===== 2. NODE A: SOLAR PV ARRAY (TOP-LEFT: 240, 200) ===== */}
@@ -329,7 +357,7 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
                 {/* 3D Isometric Platform */}
                 <ellipse cx="80" cy="80" rx="75" ry="34" fill="#000000" opacity="0.45" />
                 <path d="M 10,75 L 80,105 L 150,75 L 150,85 L 80,115 L 10,85 Z" fill="url(#pedestalSideGrad)" stroke="#1E293B" />
-                <polygon points="10,75 80,45 150,75 80,105" fill="url(#pedestalTopGrad)" stroke="#10B981" strokeWidth="1.8" />
+                <polygon points="10,75 80,45 150,75 80,105" fill="url(#pedestalTopGrad)" stroke={gridExport > 0 ? "#10B981" : (gridImport > 0 ? "#F59E0B" : "#64748B")} strokeWidth="2" />
 
                 {/* Detailed Isometric Transmission Pylons */}
                 <g transform="translate(56, 12)">
@@ -348,14 +376,32 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
                   <path d="M 24,25 Q 33,35 42,25" fill="none" stroke="#60A5FA" strokeWidth="1" />
                 </g>
 
-                {/* Floating Telemetry Badge */}
-                <g transform="translate(22, -28)">
-                  <rect x="0" y="0" width="116" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#10B981" strokeWidth="1.5" />
-                  <circle cx="18" cy="21" r="10" fill="rgba(16, 185, 129, 0.2)" />
-                  <text x="18" y="25" textAnchor="middle" fill="#10B981" fontSize="12" fontWeight="bold">🗼</text>
-                  <text x="35" y="18" fill="#10B981" fontSize="13" fontWeight="800">{(gridExport / 1000).toFixed(2)} kW</text>
-                  <text x="35" y="32" fill="#94A3B8" fontSize="10" fontWeight="600">APDCL Export</text>
-                </g>
+                {/* Floating Telemetry Badge (Shows Export if generating surplus, Import if drawing grid power at night) */}
+                {gridExport > 0 ? (
+                  <g transform="translate(20, -28)">
+                    <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#10B981" strokeWidth="1.6" />
+                    <circle cx="18" cy="21" r="10" fill="rgba(16, 185, 129, 0.2)" />
+                    <text x="18" y="25" textAnchor="middle" fill="#10B981" fontSize="12" fontWeight="bold">🗼</text>
+                    <text x="35" y="18" fill="#10B981" fontSize="13" fontWeight="800">{(gridExport / 1000).toFixed(2)} kW</text>
+                    <text x="35" y="32" fill="#94A3B8" fontSize="10" fontWeight="600">APDCL Export</text>
+                  </g>
+                ) : gridImport > 0 ? (
+                  <g transform="translate(20, -28)">
+                    <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#F59E0B" strokeWidth="1.6" />
+                    <circle cx="18" cy="21" r="10" fill="rgba(245, 158, 11, 0.2)" />
+                    <text x="18" y="25" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="bold">🗼</text>
+                    <text x="35" y="18" fill="#F59E0B" fontSize="13" fontWeight="800">{(gridImport / 1000).toFixed(2)} kW</text>
+                    <text x="35" y="32" fill="#FDE047" fontSize="10" fontWeight="600">APDCL Import</text>
+                  </g>
+                ) : (
+                  <g transform="translate(20, -28)">
+                    <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#475569" strokeWidth="1.5" />
+                    <circle cx="18" cy="21" r="10" fill="rgba(71, 85, 105, 0.2)" />
+                    <text x="18" y="25" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="bold">🗼</text>
+                    <text x="35" y="18" fill="#94A3B8" fontSize="13" fontWeight="800">0.00 kW</text>
+                    <text x="35" y="32" fill="#64748B" fontSize="10" fontWeight="600">APDCL Grid</text>
+                  </g>
+                )}
               </g>
 
               {/* ===== 5. NODE D: MODERN HOUSE (BOTTOM-RIGHT: 680, 390) ===== */}
@@ -379,11 +425,13 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
 
                 {/* Floating Telemetry Badge */}
                 <g transform="translate(25, -20)">
-                  <rect x="0" y="0" width="110" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#38BDF8" strokeWidth="1.5" />
+                  <rect x="0" y="0" width="112" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#38BDF8" strokeWidth="1.5" />
                   <circle cx="18" cy="21" r="10" fill="rgba(56, 189, 248, 0.2)" />
                   <text x="18" y="25" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="bold">🏠</text>
                   <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">{(homeLoad / 1000).toFixed(2)} kW</text>
-                  <text x="35" y="32" fill="#94A3B8" fontSize="10" fontWeight="600">Home Load</text>
+                  <text x="35" y="32" fill={gridImport > 0 ? "#FDE047" : "#94A3B8"} fontSize="10" fontWeight="600">
+                    {gridImport > 0 ? "Grid Draw" : "Home Load"}
+                  </text>
                 </g>
               </g>
 
@@ -433,19 +481,30 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
               {/* Dotted Radial Lines from Center to Surrounding Nodes */}
               {/* Center (430, 180) to Solar (160, 110) */}
               <line x1="430" y1="180" x2="160" y2="110" className="schem-line" />
-              <line x1="430" y1="180" x2="160" y2="110" className="schem-particle stroke-amber" style={particleStyle} />
+              {activePower > 0 && (
+                <line x1="160" y1="110" x2="430" y2="180" className="schem-particle stroke-amber" style={solarParticleStyle} />
+              )}
 
               {/* Center (430, 180) to Grid Tower (700, 110) */}
               <line x1="430" y1="180" x2="700" y2="110" className="schem-line" />
-              <line x1="430" y1="180" x2="700" y2="110" className="schem-particle stroke-emerald" style={particleStyle} />
+              {gridExport > 0 && (
+                <line x1="430" y1="180" x2="700" y2="110" className="schem-particle stroke-emerald" style={gridExportParticleStyle} />
+              )}
+              {gridImport > 0 && (
+                <line x1="700" y1="110" x2="430" y2="180" className="schem-particle stroke-amber" style={gridImportParticleStyle} />
+              )}
 
               {/* Center (430, 180) to Inverter (250, 270) */}
               <line x1="430" y1="180" x2="250" y2="270" className="schem-line" />
-              <line x1="430" y1="180" x2="250" y2="270" className="schem-particle stroke-rose" style={particleStyle} />
+              {activePower > 0 && (
+                <line x1="250" y1="270" x2="430" y2="180" className="schem-particle stroke-rose" style={solarParticleStyle} />
+              )}
 
               {/* Center (430, 180) to EV Charger / Load (610, 270) */}
               <line x1="430" y1="180" x2="610" y2="270" className="schem-line" />
-              <line x1="430" y1="180" x2="610" y2="270" className="schem-particle stroke-cyan" style={particleStyle} />
+              {homeLoad > 0 && (
+                <line x1="430" y1="180" x2="610" y2="270" className="schem-particle stroke-cyan" style={houseParticleStyle} />
+              )}
 
               {/* ===== CENTER NODE: HOME ===== */}
               <g transform="translate(430, 180)" filter="url(#nodeShadow)">
@@ -469,11 +528,11 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
 
               {/* ===== NODE 2: TRANSMISSION GRID PYLON ===== */}
               <g transform="translate(700, 110)" filter="url(#nodeShadow)">
-                <circle cx="0" cy="0" r="38" fill="#0F172A" stroke="#10B981" strokeWidth="2" />
-                <circle cx="0" cy="0" r="30" fill="rgba(16, 185, 129, 0.15)" />
+                <circle cx="0" cy="0" r="38" fill="#0F172A" stroke={gridExport > 0 ? "#10B981" : (gridImport > 0 ? "#F59E0B" : "#475569")} strokeWidth="2" />
+                <circle cx="0" cy="0" r="30" fill={gridExport > 0 ? "rgba(16, 185, 129, 0.15)" : (gridImport > 0 ? "rgba(245, 158, 11, 0.15)" : "rgba(71, 85, 105, 0.15)")} />
                 <text x="0" y="7" textAnchor="middle" fontSize="22">🗼</text>
-                <text x="0" y="54" textAnchor="middle" fill="#10B981" fontSize="13" fontWeight="800">
-                  {(gridExport / 1000).toFixed(1)} kW Export
+                <text x="0" y="54" textAnchor="middle" fill={gridExport > 0 ? "#10B981" : (gridImport > 0 ? "#F59E0B" : "#94A3B8")} fontSize="13" fontWeight="800">
+                  {gridExport > 0 ? `${(gridExport / 1000).toFixed(1)} kW Export` : (gridImport > 0 ? `${(gridImport / 1000).toFixed(1)} kW Import` : '0.0 kW Grid')}
                 </text>
               </g>
 
@@ -525,8 +584,16 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
               <span className="meas-val font-mono">{liveData?.grid_frequency || 50.0} Hz</span>
             </div>
             <div className="meas-row">
+              <span className="meas-label">Grid Import Power</span>
+              <span className={`meas-val font-mono ${gridImport > 0 ? 'text-amber font-bold' : ''}`}>
+                {(gridImport / 1000).toFixed(2)} kW
+              </span>
+            </div>
+            <div className="meas-row">
               <span className="meas-label">Grid Export Power</span>
-              <span className="meas-val font-mono text-emerald">{(gridExport / 1000).toFixed(2)} kW</span>
+              <span className={`meas-val font-mono ${gridExport > 0 ? 'text-emerald font-bold' : ''}`}>
+                {(gridExport / 1000).toFixed(2)} kW
+              </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Load Power (Home)</span>
@@ -534,7 +601,9 @@ export function PowerFlowCanvas({ liveData = {}, summary = {}, config = {} }) {
             </div>
             <div className="meas-row">
               <span className="meas-label">Total Solar PV Power</span>
-              <span className="meas-val font-mono text-amber">{(activePower / 1000).toFixed(2)} kW</span>
+              <span className={`meas-val font-mono ${activePower > 0 ? 'text-amber font-bold' : 'text-muted'}`}>
+                {(activePower / 1000).toFixed(2)} kW {activePower === 0 ? '(Standby)' : ''}
+              </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV1 String Telemetry</span>

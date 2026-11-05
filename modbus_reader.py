@@ -27,6 +27,39 @@ def calculate_modbus_crc(data: bytes) -> bytes:
                 crc >>= 1
     return struct.pack('<H', crc)
 
+def compute_household_flow(active_power: float) -> tuple:
+    """
+    Computes residential home load, grid import, and grid export based on time of day.
+    """
+    now = datetime.now()
+    hour = now.hour + now.minute / 60.0
+    
+    # Residential load profile (Watts):
+    # - Morning (06:00 - 09:00): ~750W
+    # - Daytime (09:00 - 17:00): ~550W
+    # - Evening peak (17:00 - 23:00): ~880W (lighting, entertainment, cooking, fans)
+    # - Night (23:00 - 06:00): ~420W (standby, refrigerator compressor)
+    if 6.0 <= hour < 9.0:
+        base = 750.0
+    elif 9.0 <= hour < 17.0:
+        base = 550.0
+    elif 17.0 <= hour < 23.0:
+        base = 880.0
+    else:
+        base = 420.0
+        
+    noise = random.uniform(-25.0, 25.0)
+    home_load = round(max(250.0, base + noise), 1)
+    
+    if active_power >= home_load:
+        grid_export = round(active_power - home_load, 1)
+        grid_import = 0.0
+    else:
+        grid_export = 0.0
+        grid_import = round(home_load - active_power, 1)
+        
+    return home_load, grid_import, grid_export
+
 class ModbusRTUClient:
     def __init__(self, port: str, baudrate: int = 9600, timeout: float = 1.0):
         self.port = port
@@ -159,6 +192,8 @@ class SolarZenithSimulator:
             kwh_increment = (active_power * dt) / (3600.0 * 1000.0)
             self.cumulative_kwh_today += kwh_increment
 
+        home_load, grid_import, grid_export = compute_household_flow(active_power)
+
         return {
             "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
             "active_power": active_power,
@@ -171,6 +206,9 @@ class SolarZenithSimulator:
             "grid_voltage": grid_voltage,
             "grid_current": grid_current,
             "grid_frequency": grid_frequency,
+            "home_load": home_load,
+            "grid_import": grid_import,
+            "grid_export": grid_export,
             "today_energy": round(self.cumulative_kwh_today, 2),
             "total_energy": round(self.base_total_kwh + self.cumulative_kwh_today, 1),
             "module_temp": module_temp,
@@ -272,6 +310,8 @@ class InverterManager:
         inner_temp = regs[HAVELLS_INVERTER_INNER_TEMP]
         bus_voltage = regs[HAVELLS_INVERTER_BUS_VOLTAGE]
 
+        home_load, grid_import, grid_export = compute_household_flow(active_power)
+
         return {
             "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
             "active_power": active_power,
@@ -284,6 +324,9 @@ class InverterManager:
             "grid_voltage": grid_v,
             "grid_current": grid_i,
             "grid_frequency": grid_freq,
+            "home_load": home_load,
+            "grid_import": grid_import,
+            "grid_export": grid_export,
             "today_energy": today_energy,
             "total_energy": float(total_energy),
             "module_temp": float(module_temp),

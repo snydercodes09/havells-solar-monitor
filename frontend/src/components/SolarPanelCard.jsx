@@ -51,8 +51,8 @@ export function SolarPanelCard({ liveData, config, summary }) {
           {/* Middle Row Stats */}
           <div className="stats-metric-duo">
             <div className="stat-col">
-              <span className="stat-label">Self-Consumption</span>
-              <span className="stat-val font-bold">680 <small>W</small></span>
+              <span className="stat-label">Home Consumption</span>
+              <span className="stat-val font-bold">{Math.round(liveData?.home_load || 680)} <small>W</small></span>
             </div>
             <div className="stat-col">
               <span className="stat-label">Today's Generation</span>
