@@ -21,8 +21,41 @@ export function PowerFlowCanvas({
 }) {
   // Mode: 'isometric' (matching Image 1) | 'schematic' (matching Image 2 bottom)
   const [viewMode, setViewMode] = useState('isometric');
+  const stageWrapperRef = useRef(null);
   const canvasRef = useRef(null);
   const phaseRef = useRef(0);
+  const [stageDimensions, setStageDimensions] = useState({ width: 960, height: 480 });
+
+  // Responsive ResizeObserver for canvas & SVG container
+  useEffect(() => {
+    const wrapper = stageWrapperRef.current;
+    if (!wrapper) return;
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const clientWidth = entry.contentRect.width;
+        if (clientWidth > 0) {
+          const newW = Math.max(320, Math.round(clientWidth));
+          const newH = Math.round(newW * 0.5); // 2:1 aspect ratio matching 960x480
+          setStageDimensions({ width: newW, height: newH });
+
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = newW * dpr;
+            canvas.height = newH * dpr;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+          }
+        }
+      }
+    });
+
+    ro.observe(wrapper);
+    return () => ro.disconnect();
+  }, [viewMode]);
 
   // HiDPI scaled canvas animation with clean requestAnimationFrame cancellation on unmount (F-02)
   useEffect(() => {
@@ -31,14 +64,6 @@ export function PowerFlowCanvas({
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          canvas.width = rect.width * dpr;
-          canvas.height = rect.height * dpr;
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        }
-
         const renderFrame = () => {
           phaseRef.current = (phaseRef.current + 0.03) % (Math.PI * 2);
           animationFrameId = requestAnimationFrame(renderFrame);
@@ -52,10 +77,14 @@ export function PowerFlowCanvas({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [viewMode]);
+  }, [viewMode, stageDimensions]);
 
   const hasCtMeter = config?.has_ct_meter === true || config?.has_ct_meter === 'true' || liveData?.has_ct_meter === true;
   const isSimulation = config?.simulation_mode === true || config?.simulation_mode === 'true' || liveData?.is_simulation === true;
+
+  const safeActiveW = Number(liveData?.active_power) || 0;
+  const safeRatedW = Number(config?.rated_capacity_w) || 3300;
+  const capacityPct = safeRatedW > 0 ? Math.min(100, Math.max(0, Math.round((safeActiveW / safeRatedW) * 100))) : 0;
 
   const activePower = liveData?.active_power !== null && liveData?.active_power !== undefined
     ? Math.round(Number(propActivePower !== undefined ? propActivePower : liveData.active_power))
@@ -122,8 +151,8 @@ export function PowerFlowCanvas({
                 </span>
               </>
             ) : (
-              <span className="metric-big-val" style={{ fontSize: '1.25rem', color: '#94a3b8' }}>
-                — <small style={{ fontSize: '0.75rem' }}>Unmeasured</small>
+              <span className="metric-big-val" style={{ fontSize: '1.15rem', color: '#94a3b8' }}>
+                Unmeasured <small style={{ fontSize: '0.75rem' }}>(No CT)</small>
               </span>
             )}
           </div>
@@ -248,7 +277,7 @@ export function PowerFlowCanvas({
               </div>
             ) : (
               <span className="metric-big-val" style={{ fontSize: '1.05rem', color: '#94a3b8' }}>
-                PCC Flow Unmeasured
+                Inverter AC Output → PCC
               </span>
             )}
           </div>
@@ -286,11 +315,13 @@ export function PowerFlowCanvas({
 
         {/* MODE A: 3D ISOMETRIC POWER FLOW (MATCHING IMAGE 1!) */}
         {viewMode === 'isometric' && (
-          <div className="isometric-stage-wrapper">
+          <div className="power-flow-canvas-wrapper isometric-stage-wrapper" ref={stageWrapperRef} style={{ position: 'relative' }}>
+            <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }} />
             <svg
               className="isometric-svg-canvas"
               viewBox="0 0 960 480"
               preserveAspectRatio="xMidYMid meet"
+              style={{ position: 'relative', zIndex: 2 }}
             >
               <defs>
                 {/* Platform Top Gradients */}
@@ -493,7 +524,7 @@ export function PowerFlowCanvas({
                         ? `${Number(liveData.grid_voltage).toFixed(0)} V`
                         : '— V'}
                     </text>
-                    <text x="35" y="32" fill="#64748B" fontSize="10" fontWeight="600">{hasCtMeter ? "APDCL Grid" : "AC Grid Feeder"}</text>
+                    <text x="35" y="32" fill="#64748B" fontSize="10" fontWeight="600">{hasCtMeter ? "APDCL Grid" : "Inverter AC Output → PCC"}</text>
                   </g>
                 )}
               </g>
@@ -522,11 +553,11 @@ export function PowerFlowCanvas({
                   <rect x="0" y="0" width="112" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#38BDF8" strokeWidth="1.5" />
                   <circle cx="18" cy="21" r="10" fill="rgba(56, 189, 248, 0.2)" />
                   <text x="18" y="25" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="bold">🏠</text>
-                  <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">
-                    {homeLoad !== null ? `${(homeLoad / 1000).toFixed(2)} kW` : '— kW'}
+                  <text x="35" y="18" fill="#F8FAFC" fontSize="12" fontWeight="800">
+                    {homeLoad !== null ? `${(homeLoad / 1000).toFixed(2)} kW` : 'Unmeasured'}
                   </text>
-                  <text x="35" y="32" fill={homeLoad !== null ? (gridImport > 0 ? "#FDE047" : "#94A3B8") : "#64748B"} fontSize="10" fontWeight="600">
-                    {homeLoad !== null ? (gridImport > 0 ? "Grid Draw" : "Home Load") : "Unmetered"}
+                  <text x="35" y="32" fill={homeLoad !== null ? (gridImport > 0 ? "#FDE047" : "#94A3B8") : "#64748B"} fontSize="9.5" fontWeight="600">
+                    {hasCtMeter ? (gridImport > 0 ? "Grid Draw" : "Home Load") : "Unmeasured (No CT)"}
                   </text>
                 </g>
               </g>
@@ -610,7 +641,7 @@ export function PowerFlowCanvas({
                 <circle cx="0" cy="0" r="36" fill="rgba(56, 189, 248, 0.15)" />
                 <text x="0" y="7" textAnchor="middle" fontSize="26">🏠</text>
                 <text x="0" y="62" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="800">
-                  {homeLoad !== null ? `${(homeLoad / 1000).toFixed(1)} kW Home` : 'Unmetered Load'}
+                  {homeLoad !== null ? `${(homeLoad / 1000).toFixed(1)} kW Home` : 'Unmeasured (No CT)'}
                 </text>
               </g>
 
@@ -636,7 +667,7 @@ export function PowerFlowCanvas({
                     ? `${(gridExport / 1000).toFixed(1)} kW Export`
                     : (gridImport > 0
                       ? `${(gridImport / 1000).toFixed(1)} kW Import`
-                      : (liveData?.grid_voltage ? `${Number(liveData.grid_voltage).toFixed(0)} V Grid` : 'Grid Standby'))}
+                      : (hasCtMeter ? (liveData?.grid_voltage ? `${Number(liveData.grid_voltage).toFixed(0)} V Grid` : 'Grid Standby') : 'Inverter AC Output → PCC'))}
                 </text>
               </g>
 

@@ -6,10 +6,18 @@ import {
   Settings,
   Sun,
   IndianRupee,
-  Activity
+  Activity,
+  X
 } from 'lucide-react';
 
-export function Sidebar({ activeTab, setActiveTab, onOpenSettings, liveStatus }) {
+export function Sidebar({
+  activeTab,
+  setActiveTab,
+  onOpenSettings: _onOpenSettings,
+  liveStatus: _liveStatus,
+  isOpen = false,
+  onClose = () => {}
+}) {
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: LayoutGrid },
     { id: 'flow', label: 'Power Flow', icon: Activity },
@@ -19,14 +27,29 @@ export function Sidebar({ activeTab, setActiveTab, onOpenSettings, liveStatus })
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const handleSelectTab = (tabId) => {
+    setActiveTab(tabId);
+    if (onClose) onClose();
+  };
+
   return (
-    <aside className="sidebar" style={{ overflowY: 'auto' }}>
-      {/* Brand */}
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      {/* Brand & Mobile Close */}
       <div className="sidebar-brand">
-        <div className="brand-icon-wrapper">
-          <Sun className="brand-sun-icon" size={24} />
+        <div className="flex-align gap-10">
+          <div className="brand-icon-wrapper">
+            <Sun className="brand-sun-icon" size={24} />
+          </div>
+          <span className="brand-name">Solary <small>Havells</small></span>
         </div>
-        <span className="brand-name">Solary <small>Havells</small></span>
+        <button
+          type="button"
+          className="sidebar-close-btn"
+          onClick={onClose}
+          aria-label="Close navigation drawer"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Nav Menu */}
@@ -37,8 +60,9 @@ export function Sidebar({ activeTab, setActiveTab, onOpenSettings, liveStatus })
           return (
             <button
               key={item.id}
+              type="button"
               className={`nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleSelectTab(item.id)}
             >
               <Icon size={18} className="nav-icon" />
               <span className="nav-label">{item.label}</span>

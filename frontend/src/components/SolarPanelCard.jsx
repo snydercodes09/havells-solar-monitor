@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { ChevronDown, ArrowUpRight, Zap, Sun } from 'lucide-react';
 
+const fmtNum = (val, decimals = 1, unit = '', fallback = '—') =>
+  val !== null && val !== undefined && !Number.isNaN(Number(val))
+    ? `${Number(val).toFixed(decimals)}${unit ? ` ${unit}` : ''}`
+    : fallback;
+
 export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
   const [selectedString, setSelectedString] = useState('all');
 
-  const activePower = liveData.active_power !== null && liveData.active_power !== undefined ? Math.round(liveData.active_power) : null;
-  const pv1Power = liveData.pv1_power !== null && liveData.pv1_power !== undefined ? Math.round(liveData.pv1_power) : null;
-  const pv2Power = liveData.pv2_power !== null && liveData.pv2_power !== undefined ? Math.round(liveData.pv2_power) : null;
+  const isPv2Unconnected = liveData?.pv2_voltage == null && liveData?.pv2_power == null;
+
+  const activePower = liveData.active_power !== null && liveData.active_power !== undefined ? Math.round(Number(liveData.active_power)) : null;
+  const pv1Power = liveData.pv1_power !== null && liveData.pv1_power !== undefined ? Math.round(Number(liveData.pv1_power)) : null;
+  const pv2Power = isPv2Unconnected ? null : (liveData.pv2_power !== null && liveData.pv2_power !== undefined ? Math.round(Number(liveData.pv2_power)) : null);
 
   let displayPower = activePower;
   let labelString = 'Total Generation';
@@ -58,7 +65,7 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
               <span className="stat-label">Lifetime Yield</span>
               <span className="stat-val font-semibold font-mono">
                 {summary.lifetime_kwh !== null && summary.lifetime_kwh !== undefined
-                  ? `${Math.round(summary.lifetime_kwh).toLocaleString()} `
+                  ? `${Math.round(Number(summary.lifetime_kwh)).toLocaleString()} `
                   : '— '}
                 <small>kWh</small>
               </span>
@@ -73,7 +80,7 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
                   <span className="stat-label">Home Consumption</span>
                   <span className="stat-val font-bold font-mono">
                     {liveData?.home_load !== null && liveData?.home_load !== undefined ? (
-                      <>{Math.round(liveData.home_load)} <small>W</small></>
+                      <>{Math.round(Number(liveData.home_load))} <small>W</small></>
                     ) : (
                       '— W'
                     )}
@@ -84,7 +91,7 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
                   <span className="stat-label">AC Grid Voltage (PCC)</span>
                   <span className="stat-val font-bold font-mono">
                     {liveData?.grid_voltage !== null && liveData?.grid_voltage !== undefined ? (
-                      <>{Number(liveData.grid_voltage).toFixed(1)} <small>V AC</small></>
+                      <>{fmtNum(liveData.grid_voltage, 1, 'V AC')}</>
                     ) : (
                       <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>— V (Standby)</span>
                     )}
@@ -96,9 +103,9 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
               <span className="stat-label">Today's Generation</span>
               <span className="stat-val font-bold font-mono text-emerald">
                 {liveData.today_energy !== null && liveData.today_energy !== undefined ? (
-                  <>{Number(liveData.today_energy).toFixed(2)} <small>kWh</small></>
+                  <>{fmtNum(liveData.today_energy, 2, 'kWh')}</>
                 ) : summary?.today_kwh !== null && summary?.today_kwh !== undefined ? (
-                  <>{Number(summary.today_kwh).toFixed(2)} <small>kWh</small></>
+                  <>{fmtNum(summary.today_kwh, 2, 'kWh')}</>
                 ) : (
                   <>— <small>kWh</small></>
                 )}
@@ -108,14 +115,27 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
 
           {/* Bottom Real Time Power Big Readout */}
           <div className="stat-realtime-block">
-            <span className="stat-label">Real-Time AC Output ({labelString})</span>
+            <div className="flex-align gap-8">
+              <span className="stat-label">Real-Time AC Output ({labelString})</span>
+              {selectedString === 'pv2' && isPv2Unconnected && (
+                <span className="badge-highlight font-mono text-muted" style={{ fontSize: '0.7rem' }}>
+                  MPPT 2: Unconnected (Single-String Array)
+                </span>
+              )}
+            </div>
             <div className="realtime-val-wrapper">
               <span className="realtime-big-num font-mono">
-                {displayPower !== null && displayPower !== undefined ? displayPower.toLocaleString() : '—'}
+                {selectedString === 'pv2' && isPv2Unconnected
+                  ? '—'
+                  : displayPower !== null && displayPower !== undefined
+                  ? displayPower.toLocaleString()
+                  : '—'}
               </span>
               <span className="realtime-unit">W</span>
               <span className={`trend-badge ${isGenerating ? 'generating' : 'standby'}`}>
-                {isGenerating ? (
+                {selectedString === 'pv2' && isPv2Unconnected ? (
+                  'Unconnected'
+                ) : isGenerating ? (
                   <><ArrowUpRight size={13} /> Generating</>
                 ) : (
                   'Standby (0 W)'
@@ -135,7 +155,7 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
             >
               <option value="all">All Arrays (PV1 + PV2)</option>
               <option value="pv1">PV String 1 (PV1)</option>
-              <option value="pv2">PV String 2 (PV2)</option>
+              <option value="pv2">PV String 2 (PV2 - Unconnected)</option>
             </select>
             <ChevronDown size={13} className="select-arrow" />
           </div>
@@ -196,8 +216,12 @@ export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
           </div>
 
           <div className="panel-count-label">
-            <span className="count-title">Dual String Array</span>
-            <span className="count-num">8 Monocrystalline Panels</span>
+            <span className="count-title">
+              {isPv2Unconnected ? 'Single-String Array' : 'Dual String Array'}
+            </span>
+            <span className="count-num">
+              {isPv2Unconnected ? '8 Panels (PV1 Active • MPPT 2 Unconnected)' : '8 Monocrystalline Panels'}
+            </span>
           </div>
         </div>
       </div>

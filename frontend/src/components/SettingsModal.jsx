@@ -91,7 +91,7 @@ export function SettingsModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-box">
+      <div className="modal-box modal-container">
         {/* Header */}
         <div className="modal-header">
           <div className="flex-align gap-10">

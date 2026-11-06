@@ -46,11 +46,13 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
 
   // Memoize chart options so the object reference remains strictly stable
   const chartOptions = useMemo(() => ({
+    theme: { mode: 'dark' },
     chart: {
       id: 'energy-production-area',
       type: 'area',
       height: 290,
       background: 'transparent',
+      fontFamily: 'inherit',
       toolbar: { show: false },
       animations: {
         enabled: false, // Disabling redraw animation prevents layout shifts and scroll jumps!
@@ -77,19 +79,19 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
     xaxis: {
       categories: categories,
       labels: {
-        style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px', fontWeight: 600 }
+        style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 600 }
       },
       axisBorder: { show: false },
       axisTicks: { show: false }
     },
     yaxis: {
       labels: {
-        style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+        style: { colors: '#94a3b8', fontSize: '11px' },
         formatter: (val) => val ? (viewMode === 'today' ? `${Math.round(val)}W` : `${val}k`) : '0'
       }
     },
     grid: {
-      borderColor: 'rgba(255, 255, 255, 0.04)',
+      borderColor: 'rgba(148, 163, 184, 0.12)',
       strokeDashArray: 4
     },
     tooltip: {
@@ -98,8 +100,12 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
         formatter: (val) => val ? (viewMode === 'today' ? `${Math.round(val)} W` : `${val} kWh`) : '0'
       }
     },
-    legend: { show: false }
-  }), [categories, viewMode]);
+    legend: {
+      show: Boolean(hasCt && consumedData.length > 0),
+      labels: { colors: '#cbd5e1' },
+      itemMargin: { horizontal: 12, vertical: 4 }
+    }
+  }), [categories, viewMode, hasCt, consumedData.length]);
 
   const series = useMemo(() => {
     const list = [

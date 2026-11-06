@@ -487,7 +487,7 @@ export function SystemDiagnosticsSection({ liveData = {}, summary = {}, config =
       </div>
 
       {/* ================= TOP METRIC CARDS ================= */}
-      <div className="iso-quick-cards-grid" style={{ marginBottom: '22px' }}>
+      <div className="diag-grid iso-quick-cards-grid" style={{ marginBottom: '22px' }}>
         {/* Card 1: Power Factor */}
         <div className="iso-metric-card">
           <div className="metric-header-row">
@@ -666,42 +666,42 @@ export function SystemDiagnosticsSection({ liveData = {}, summary = {}, config =
         </div>
 
         {/* Registers Table */}
-        <div className="table-wrapper" style={{ marginTop: '16px' }}>
+        <div className="table-wrapper table-responsive" style={{ marginTop: '16px' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: '100px' }}>Address</th>
-                <th>Register Identifier</th>
-                <th>Parameter Description</th>
-                <th style={{ textAlign: 'right' }}>Live Transmitted Value</th>
-                <th style={{ width: '80px' }}>Unit</th>
-                <th>Modbus Scale</th>
-                <th>Operating Limits</th>
-                <th style={{ textAlign: 'center', width: '110px' }}>Status</th>
+                <th className="text-left" style={{ width: '100px' }}>Address</th>
+                <th className="text-left">Register Identifier</th>
+                <th className="text-left">Parameter Description</th>
+                <th className="text-right">Live Transmitted Value</th>
+                <th className="text-left" style={{ width: '80px' }}>Unit</th>
+                <th className="text-left">Modbus Scale</th>
+                <th className="text-left">Operating Limits</th>
+                <th className="text-center" style={{ width: '110px' }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {filteredRegisters.map((reg) => (
                 <tr key={reg.addr}>
-                  <td className="font-mono text-cyan" style={{ fontWeight: 600 }}>
+                  <td className="text-left font-mono text-cyan" style={{ fontWeight: 600 }}>
                     {reg.addr}
                   </td>
-                  <td className="font-mono text-white" style={{ fontSize: '12px' }}>
+                  <td className="text-left font-mono text-white" style={{ fontSize: '12px' }}>
                     {reg.name}
                   </td>
-                  <td style={{ color: '#E2E8F0', fontWeight: 500 }}>
+                  <td className="text-left" style={{ color: '#E2E8F0', fontWeight: 500 }}>
                     {reg.label}
                   </td>
-                  <td className="font-mono" style={{ textAlign: 'right', fontSize: '14px', fontWeight: 700, color: '#38BDF8' }}>
+                  <td className="text-right font-mono" style={{ fontSize: '14px', fontWeight: 700, color: '#38BDF8' }}>
                     {reg.value}
                   </td>
-                  <td className="font-mono text-muted">
+                  <td className="text-left font-mono text-muted">
                     {reg.unit}
                   </td>
-                  <td className="font-mono" style={{ fontSize: '11.5px', color: '#94A3B8' }}>
+                  <td className="text-left font-mono" style={{ fontSize: '11.5px', color: '#94A3B8' }}>
                     {reg.scale}
                   </td>
-                  <td style={{ fontSize: '11.5px', color: '#94A3B8' }}>
+                  <td className="text-left" style={{ fontSize: '11.5px', color: '#94A3B8' }}>
                     {reg.limit}
                   </td>
                   <td style={{ textAlign: 'center' }}>

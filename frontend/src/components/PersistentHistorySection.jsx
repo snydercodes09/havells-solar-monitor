@@ -94,10 +94,12 @@ export function PersistentHistorySection({
   }, [period, monthlyHistory, activeHistorySlice]);
 
   const yieldChartOptions = useMemo(() => ({
+    theme: { mode: 'dark' },
     chart: {
       id: 'yield-chart',
       type: 'line',
       height: 340,
+      fontFamily: 'inherit',
       background: 'transparent',
       toolbar: { show: false },
       animations: { enabled: false },
@@ -132,7 +134,7 @@ export function PersistentHistorySection({
     xaxis: {
       categories: yieldCategories,
       labels: {
-        style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px', fontWeight: 600 }
+        style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 600 }
       },
       axisBorder: { show: false },
       axisTicks: { show: false }
@@ -141,7 +143,7 @@ export function PersistentHistorySection({
       {
         title: { text: 'Solar Energy (kWh)', style: { color: '#10B981', fontWeight: 700, fontSize: '12px' } },
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `${val.toFixed(1)} kWh` : '0'
         }
       },
@@ -149,13 +151,13 @@ export function PersistentHistorySection({
         opposite: true,
         title: { text: 'APDCL Offset (₹)', style: { color: '#06B6D4', fontWeight: 700, fontSize: '12px' } },
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `₹ ${Math.round(val)}` : '0'
         }
       }
     ],
     grid: {
-      borderColor: 'rgba(255, 255, 255, 0.04)',
+      borderColor: 'rgba(148, 163, 184, 0.12)',
       strokeDashArray: 4
     },
     tooltip: {
@@ -172,7 +174,7 @@ export function PersistentHistorySection({
     legend: {
       position: 'top',
       horizontalAlign: 'right',
-      labels: { colors: '#94A3B8' },
+      labels: { colors: '#cbd5e1' },
       fontSize: '12px',
       markers: { radius: 12 }
     }
@@ -213,10 +215,12 @@ export function PersistentHistorySection({
   }, [todayCurve, activeHistorySlice]);
 
   const stringChartOptions = useMemo(() => ({
+    theme: { mode: 'dark' },
     chart: {
       id: 'string-chart',
       type: 'area',
       height: 340,
+      fontFamily: 'inherit',
       background: 'transparent',
       toolbar: { show: false },
       animations: { enabled: false },
@@ -241,7 +245,7 @@ export function PersistentHistorySection({
     xaxis: {
       categories: stringCategories,
       labels: {
-        style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px', fontWeight: 600 }
+        style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 600 }
       },
       axisBorder: { show: false }
     },
@@ -249,7 +253,7 @@ export function PersistentHistorySection({
       {
         title: { text: 'String Power (Watts)', style: { color: '#F59E0B', fontWeight: 700, fontSize: '12px' } },
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `${Math.round(val)} W` : '0'
         }
       },
@@ -259,13 +263,13 @@ export function PersistentHistorySection({
         min: 20,
         max: 80,
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `${Math.round(val)}°C` : '0'
         }
       }
     ],
     grid: {
-      borderColor: 'rgba(255, 255, 255, 0.04)',
+      borderColor: 'rgba(148, 163, 184, 0.12)',
       strokeDashArray: 4
     },
     tooltip: {
@@ -275,7 +279,7 @@ export function PersistentHistorySection({
     legend: {
       position: 'top',
       horizontalAlign: 'right',
-      labels: { colors: '#94A3B8' },
+      labels: { colors: '#cbd5e1' },
       fontSize: '12px'
     }
   }), [stringCategories]);
@@ -300,10 +304,12 @@ export function PersistentHistorySection({
   }, [activeHistorySlice]);
 
   const sunlightChartOptions = useMemo(() => ({
+    theme: { mode: 'dark' },
     chart: {
       id: 'sunlight-chart',
       type: 'line',
       height: 340,
+      fontFamily: 'inherit',
       background: 'transparent',
       toolbar: { show: false },
       animations: { enabled: false },
@@ -325,7 +331,7 @@ export function PersistentHistorySection({
     xaxis: {
       categories: sunlightCategories,
       labels: {
-        style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px', fontWeight: 600 }
+        style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 600 }
       },
       axisBorder: { show: false }
     },
@@ -335,7 +341,7 @@ export function PersistentHistorySection({
         min: 0,
         max: 9,
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `${val.toFixed(1)} hrs` : '0'
         }
       },
@@ -345,20 +351,20 @@ export function PersistentHistorySection({
         min: 0,
         max: 3500,
         labels: {
-          style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' },
+          style: { colors: '#94a3b8', fontSize: '11px' },
           formatter: val => val ? `${Math.round(val)} W` : '0'
         }
       }
     ],
     grid: {
-      borderColor: 'rgba(255, 255, 255, 0.04)',
+      borderColor: 'rgba(148, 163, 184, 0.12)',
       strokeDashArray: 4
     },
     tooltip: { theme: 'dark', shared: true },
     legend: {
       position: 'top',
       horizontalAlign: 'right',
-      labels: { colors: '#94A3B8' }
+      labels: { colors: '#cbd5e1' }
     }
   }), [sunlightCategories]);
 
@@ -369,10 +375,12 @@ export function PersistentHistorySection({
 
   // 4. Chart D: Monthly Long-Term APDCL Comparison
   const monthChartOptions = useMemo(() => ({
+    theme: { mode: 'dark' },
     chart: {
       id: 'month-chart',
       type: 'line',
       height: 340,
+      fontFamily: 'inherit',
       background: 'transparent',
       toolbar: { show: false },
       animations: { enabled: false },
@@ -393,22 +401,22 @@ export function PersistentHistorySection({
     dataLabels: { enabled: false },
     xaxis: {
       categories: monthlyHistory.map(m => m.month || 'Month'),
-      labels: { style: { colors: '#64748B', fontFamily: 'Plus Jakarta Sans', fontSize: '11px', fontWeight: 600 } }
+      labels: { style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 600 } }
     },
     yaxis: [
       {
         title: { text: 'Total Yield (kWh)', style: { color: '#3B82F6', fontWeight: 700 } },
-        labels: { style: { colors: '#64748B' }, formatter: val => val ? `${val}k` : '0' }
+        labels: { style: { colors: '#94a3b8' }, formatter: val => val ? `${val}k` : '0' }
       },
       {
         opposite: true,
         title: { text: 'Total Net Savings (₹)', style: { color: '#10B981', fontWeight: 700 } },
-        labels: { style: { colors: '#64748B' }, formatter: val => `₹${Math.round(val || 0)}` }
+        labels: { style: { colors: '#94a3b8' }, formatter: val => `₹${Math.round(val || 0)}` }
       }
     ],
-    grid: { borderColor: 'rgba(255, 255, 255, 0.04)', strokeDashArray: 4 },
+    grid: { borderColor: 'rgba(148, 163, 184, 0.12)', strokeDashArray: 4 },
     tooltip: { theme: 'dark', shared: true },
-    legend: { position: 'top', horizontalAlign: 'right', labels: { colors: '#94A3B8' } }
+    legend: { position: 'top', horizontalAlign: 'right', labels: { colors: '#cbd5e1' } }
   }), [monthlyHistory]);
 
   const monthSeries = useMemo(() => [
@@ -657,63 +665,63 @@ export function PersistentHistorySection({
           </div>
         </div>
 
-        <div className="table-wrapper">
+        <div className="table-wrapper table-responsive">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Daily Yield (kWh)</th>
-                <th>Peak Zenith Power</th>
-                <th>Sunlight Hours</th>
-                <th>APDCL Slab Displaced</th>
-                <th>Money Saved (₹)</th>
-                <th>CO₂ Avoided</th>
+                <th className="text-left">Date</th>
+                <th className="text-right">Daily Yield (kWh)</th>
+                <th className="text-right">Peak Zenith Power</th>
+                <th className="text-right">Sunlight Hours</th>
+                <th className="text-left">APDCL Slab Displaced</th>
+                <th className="text-right">Money Saved (₹)</th>
+                <th className="text-right">CO₂ Avoided</th>
               </tr>
             </thead>
             <tbody>
               {filteredTable.length > 0 ? (
                 filteredTable.map((row) => (
                   <tr key={row.date}>
-                    <td>
+                    <td className="text-left">
                       <div className="date-cell font-mono">
                         <Calendar size={13} className="text-muted" />
                         <strong>{row.date}</strong>
                       </div>
                     </td>
-                    <td>
+                    <td className="text-right">
                       <span className="text-emerald font-bold font-mono" style={{ fontSize: '14px' }}>
-                        {row.energy_kwh}
+                        {row.energy_kwh ?? 0}
                       </span>{' '}
                       <small className="text-muted">kWh</small>
                     </td>
-                    <td>
-                      <span className="font-mono font-semibold">{row.peak_power}</span>{' '}
+                    <td className="text-right">
+                      <span className="font-mono font-semibold">{row.peak_power ?? 0}</span>{' '}
                       <small className="text-muted">W</small>
                     </td>
-                    <td>
-                      <span className="sunlight-pill font-mono">
+                    <td className="text-right">
+                      <span className="sunlight-pill font-mono" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         <Sun size={11} className="text-amber" />
-                        {row.sunlight_hours} hrs
+                        {row.sunlight_hours ?? 0} hrs
                       </span>
                     </td>
-                    <td>
+                    <td className="text-left">
                       <span className="badge-highlight font-mono">
                         {row.apdcl_slab_offset || 'Slab 3: >240 Units'}
                       </span>
                     </td>
-                    <td>
+                    <td className="text-right">
                       <span className="text-cyan font-bold font-mono" style={{ fontSize: '14px' }}>
-                        ₹ {row.earnings_inr.toFixed(2)}
+                        ₹ {Number(row.earnings_inr ?? 0).toFixed(2)}
                       </span>
                     </td>
-                    <td>
-                      <span className="font-mono text-muted">{row.co2_saved_kg} kg</span>
+                    <td className="text-right">
+                      <span className="font-mono text-muted">{row.co2_saved_kg ?? 0} kg</span>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>
                     No telemetry records found matching "{searchTerm}"
                   </td>
                 </tr>

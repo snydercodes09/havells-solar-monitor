@@ -51,6 +51,7 @@ export function ApdclBillingSection({
   // Interactive Custom Bill Testing Lab State (Requirement 7)
   const [calcImportKwh, setCalcImportKwh] = useState('180');
   const [calcExportKwh, setCalcExportKwh] = useState('0');
+  const [calcSelfConsumedKwh, setCalcSelfConsumedKwh] = useState('');
   const [calcSanctionedKw, setCalcSanctionedKw] = useState('3.0');
   const [calcMode, setCalcMode] = useState('net_metering');
   const [calcResult, setCalcResult] = useState(null);
@@ -62,11 +63,20 @@ export function ApdclBillingSection({
   const lifetimeCo2 = Number(summary?.lifetime_co2_kg) || (lifetimeKwh * 0.82);
   const treesEquiv = Number(summary?.trees_equivalent) || Math.round(lifetimeCo2 / 21.77);
 
-  const runBillCalculation = useCallback(async (impVal, expVal, loadVal, modeVal) => {
+  const runBillCalculation = useCallback(async (impVal, expVal, loadVal, modeVal, selfVal) => {
     const imp = parseFloat(impVal !== undefined ? impVal : calcImportKwh) || 0;
     const exp = parseFloat(expVal !== undefined ? expVal : calcExportKwh) || 0;
     const load = parseFloat(loadVal !== undefined ? loadVal : calcSanctionedKw) || 3.0;
     const mode = modeVal !== undefined ? modeVal : calcMode;
+    const customSelf = selfVal !== undefined ? selfVal : calcSelfConsumedKwh;
+
+    const derivedSelfConsumed =
+      customSelf !== '' && customSelf != null
+        ? Number(customSelf)
+        : meterSyncSummary?.self_consumed_kwh != null
+        ? Number(meterSyncSummary.self_consumed_kwh)
+        : Math.max(0, Number(summary?.month_kwh || 0) - Number(exp || 0));
+
     setCalcLoading(true);
     try {
       if (onCalculateCustomBill) {
@@ -75,7 +85,7 @@ export function ApdclBillingSection({
           export_kwh: exp,
           sanctioned_kw: load,
           metering_mode: mode,
-          self_consumed_kwh: 0
+          self_consumed_kwh: derivedSelfConsumed
         });
         if (res) {
           setCalcResult(res);
@@ -86,10 +96,10 @@ export function ApdclBillingSection({
     } finally {
       setCalcLoading(false);
     }
-  }, [calcImportKwh, calcExportKwh, calcSanctionedKw, calcMode, onCalculateCustomBill]);
+  }, [calcImportKwh, calcExportKwh, calcSanctionedKw, calcMode, calcSelfConsumedKwh, meterSyncSummary, summary?.month_kwh, onCalculateCustomBill]);
 
   useEffect(() => {
-    runBillCalculation('180', '0', '3.0', 'net_metering');
+    runBillCalculation('180', '0', '3.0', 'net_metering', '');
   }, []);
 
   const handleSubmit = async (e) => {
@@ -152,6 +162,7 @@ export function ApdclBillingSection({
 
   const reconciliation = meterSyncSummary?.reconciliation;
   const hasReconciliation = reconciliation && reconciliation.delta_import_kwh !== undefined;
+  const readingsCount = meterReadings.length || Number(meterSyncSummary?.readings_count || 0);
 
   return (
     <div className="apdcl-container">
@@ -168,6 +179,28 @@ export function ApdclBillingSection({
           <span>Bi-Directional Net Metering</span>
         </div>
       </div>
+
+      {/* 1-Reading Baseline State Informational Callout */}
+      {readingsCount < 2 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          padding: '0.85rem 1.15rem',
+          borderRadius: '10px',
+          background: 'rgba(56, 189, 248, 0.1)',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          color: '#bae6fd',
+          fontSize: '0.82rem',
+          lineHeight: 1.45,
+          marginBottom: '1rem'
+        }}>
+          <Info size={20} className="text-cyan" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>1-Reading Baseline State:</strong> Log at least 2 APDCL meter index readings (or use the Custom Bill Simulator below) to compute interval ΔImport, ΔExport, and exact self-consumption.
+          </div>
+        </div>
+      )}
 
       {/* Sub-Navigation Switcher */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
@@ -581,41 +614,41 @@ export function ApdclBillingSection({
             </div>
 
             {meterReadings.length > 0 ? (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+              <div className="table-responsive">
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.15)', color: '#94a3b8' }}>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Date</th>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Cumulative Import</th>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Cumulative Export</th>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Source</th>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Billing Period</th>
-                      <th style={{ padding: '0.6rem 0.75rem' }}>Notes</th>
-                      <th style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>Action</th>
+                      <th className="text-left" style={{ padding: '0.75rem 1rem' }}>Date</th>
+                      <th className="text-right" style={{ padding: '0.75rem 1rem' }}>Cumulative Import</th>
+                      <th className="text-right" style={{ padding: '0.75rem 1rem' }}>Cumulative Export</th>
+                      <th className="text-left" style={{ padding: '0.75rem 1rem' }}>Source</th>
+                      <th className="text-left" style={{ padding: '0.75rem 1rem' }}>Billing Period</th>
+                      <th className="text-left" style={{ padding: '0.75rem 1rem' }}>Notes</th>
+                      <th className="text-right" style={{ padding: '0.75rem 1rem' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {meterReadings.map((r) => (
                       <tr key={r.id} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                        <td style={{ padding: '0.65rem 0.75rem', fontWeight: 600, color: '#f8fafc' }}>
+                        <td className="text-left" style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#f8fafc' }}>
                           {r.reading_date}
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', fontFamily: 'monospace', color: '#fca5a5' }}>
-                          {Number(r.import_kwh).toFixed(2)} kWh
+                        <td className="text-right font-mono" style={{ padding: '0.75rem 1rem', color: '#fca5a5' }}>
+                          {Number(r.import_kwh ?? 0).toFixed(2)} kWh
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', fontFamily: 'monospace', color: '#86efac' }}>
-                          {Number(r.export_kwh).toFixed(2)} kWh
+                        <td className="text-right font-mono" style={{ padding: '0.75rem 1rem', color: '#86efac' }}>
+                          {Number(r.export_kwh ?? 0).toFixed(2)} kWh
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', color: '#38bdf8' }}>
+                        <td className="text-left" style={{ padding: '0.75rem 1rem', color: '#38bdf8' }}>
                           {r.source || 'Manual LCD'}
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', color: '#94a3b8' }}>
+                        <td className="text-left text-muted" style={{ padding: '0.75rem 1rem' }}>
                           {r.billing_start_date && r.billing_end_date ? `${r.billing_start_date} → ${r.billing_end_date}` : '—'}
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', color: '#64748b' }}>
+                        <td className="text-left text-muted" style={{ padding: '0.75rem 1rem' }}>
                           {r.notes || '—'}
                         </td>
-                        <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>
+                        <td className="text-right" style={{ padding: '0.75rem 1rem' }}>
                           <button
                             type="button"
                             onClick={() => handleDelete(r.id, r.reading_date)}
@@ -711,46 +744,46 @@ export function ApdclBillingSection({
               </div>
 
               {/* Slabs Table */}
-              <div style={{ overflowX: 'auto', marginBottom: '0.85rem' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left' }}>
+              <div className="table-responsive" style={{ marginBottom: '0.85rem' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.15)', color: '#94a3b8' }}>
-                      <th style={{ padding: '0.4rem 0.5rem' }}>Slab Tier</th>
-                      <th style={{ padding: '0.4rem 0.5rem' }}>Base Tariff</th>
-                      <th style={{ padding: '0.4rem 0.5rem' }}>GoA Subsidy</th>
-                      <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right' }}>Effective Rate</th>
+                      <th className="text-left" style={{ padding: '0.5rem 0.65rem' }}>Slab Tier</th>
+                      <th className="text-right" style={{ padding: '0.5rem 0.65rem' }}>Base Tariff</th>
+                      <th className="text-right" style={{ padding: '0.5rem 0.65rem' }}>GoA Subsidy</th>
+                      <th className="text-right" style={{ padding: '0.5rem 0.65rem' }}>Effective Rate</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                      <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>Slab 1 (0–120 units)</td>
-                      <td style={{ padding: '0.5rem', color: '#94a3b8' }}>₹5.99</td>
-                      <td style={{ padding: '0.5rem', color: '#10b981' }}>-₹1.74</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>₹4.25 / kWh</td>
+                      <td className="text-left" style={{ padding: '0.5rem 0.65rem', fontWeight: 600, color: '#f8fafc' }}>Slab 1 (0–120 units)</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#94a3b8' }}>₹5.99</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#10b981' }}>-₹1.74</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', fontWeight: 700, color: '#38bdf8' }}>₹4.25 / kWh</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                      <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>Slab 2 (121–240 units)</td>
-                      <td style={{ padding: '0.5rem', color: '#94a3b8' }}>₹7.29</td>
-                      <td style={{ padding: '0.5rem', color: '#10b981' }}>-₹0.99</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>₹6.30 / kWh</td>
+                      <td className="text-left" style={{ padding: '0.5rem 0.65rem', fontWeight: 600, color: '#f8fafc' }}>Slab 2 (121–240 units)</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#94a3b8' }}>₹7.29</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#10b981' }}>-₹0.99</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', fontWeight: 700, color: '#38bdf8' }}>₹6.30 / kWh</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                      <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>Slab 3 (241–300 units)</td>
-                      <td style={{ padding: '0.5rem', color: '#94a3b8' }}>₹8.19</td>
-                      <td style={{ padding: '0.5rem', color: '#10b981' }}>-₹0.99</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>₹7.20 / kWh</td>
+                      <td className="text-left" style={{ padding: '0.5rem 0.65rem', fontWeight: 600, color: '#f8fafc' }}>Slab 3 (241–300 units)</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#94a3b8' }}>₹8.19</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#10b981' }}>-₹0.99</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', fontWeight: 700, color: '#38bdf8' }}>₹7.20 / kWh</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                      <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>Slab 4 (301–500 units)</td>
-                      <td style={{ padding: '0.5rem', color: '#94a3b8' }}>₹8.19</td>
-                      <td style={{ padding: '0.5rem', color: '#10b981' }}>-₹0.79</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>₹7.40 / kWh</td>
+                      <td className="text-left" style={{ padding: '0.5rem 0.65rem', fontWeight: 600, color: '#f8fafc' }}>Slab 4 (301–500 units)</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#94a3b8' }}>₹8.19</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#10b981' }}>-₹0.79</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', fontWeight: 700, color: '#38bdf8' }}>₹7.40 / kWh</td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>Slab 5 (&gt; 500 units)</td>
-                      <td style={{ padding: '0.5rem', color: '#94a3b8' }}>₹8.19</td>
-                      <td style={{ padding: '0.5rem', color: '#64748b' }}>₹0.00</td>
-                      <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#f59e0b' }}>₹8.19 / kWh</td>
+                      <td className="text-left" style={{ padding: '0.5rem 0.65rem', fontWeight: 600, color: '#f8fafc' }}>Slab 5 (&gt; 500 units)</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#94a3b8' }}>₹8.19</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', color: '#64748b' }}>₹0.00</td>
+                      <td className="text-right font-mono" style={{ padding: '0.5rem 0.65rem', fontWeight: 700, color: '#f59e0b' }}>₹8.19 / kWh</td>
                     </tr>
                   </tbody>
                 </table>
@@ -807,13 +840,13 @@ export function ApdclBillingSection({
                         <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '0.65rem', borderRadius: '6px' }}>
                           <span style={{ fontSize: '0.7rem', color: '#fca5a5', display: 'block' }}>Bill Without Solar</span>
                           <strong style={{ fontSize: '1.15rem', color: '#f87171', fontFamily: 'monospace' }}>
-                            ₹{Number(s.bill_without_solar).toFixed(2)}
+                            ₹{Number(s?.bill_without_solar ?? 0).toFixed(2)}
                           </strong>
                         </div>
                         <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.65rem', borderRadius: '6px' }}>
                           <span style={{ fontSize: '0.7rem', color: '#86efac', display: 'block' }}>Estimated Net Bill</span>
                           <strong style={{ fontSize: '1.15rem', color: '#4ade80', fontFamily: 'monospace' }}>
-                            ₹{Number(s.estimated_net_bill).toFixed(2)}
+                            ₹{Number(s?.estimated_net_bill ?? 0).toFixed(2)}
                           </strong>
                         </div>
                       </div>
@@ -822,7 +855,7 @@ export function ApdclBillingSection({
                       <div style={{ background: 'rgba(16, 185, 129, 0.15)', padding: '0.5rem 0.75rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.78rem', color: '#86efac', fontWeight: 600 }}>Period Monetary Savings:</span>
                         <strong style={{ fontSize: '0.95rem', color: '#4ade80', fontFamily: 'monospace' }}>
-                          ₹{Number(s.estimated_savings_inr).toFixed(2)}
+                          ₹{Number(s?.estimated_savings_inr ?? 0).toFixed(2)}
                         </strong>
                       </div>
 
@@ -830,29 +863,29 @@ export function ApdclBillingSection({
                       <div style={{ fontSize: '0.75rem', borderTop: '1px solid rgba(148, 163, 184, 0.15)', paddingTop: '0.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#94a3b8' }}>
                           <span>Net Units Billed:</span>
-                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{s.net_units > 0 ? `${s.net_units} kWh` : '0.00 kWh (Banked)'}</strong>
+                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{Number(s?.net_units ?? 0) > 0 ? `${s.net_units} kWh` : '0.00 kWh (Banked)'}</strong>
                         </div>
-                        {s.banked_surplus_kwh > 0 && (
+                        {Number(s?.banked_surplus_kwh ?? 0) > 0 && (
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#10b981' }}>
                             <span>Surplus Banked 1:1:</span>
-                            <strong style={{ fontFamily: 'monospace' }}>+{s.banked_surplus_kwh} kWh (₹{s.surplus_credit_inr} APPC val)</strong>
+                            <strong style={{ fontFamily: 'monospace' }}>+{s.banked_surplus_kwh} kWh (₹{Number(s.surplus_credit_inr ?? 0).toFixed(2)} APPC val)</strong>
                           </div>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#94a3b8' }}>
                           <span>Net Energy Charges:</span>
-                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s.net_energy_charge || 0).toFixed(2)}</strong>
+                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s?.net_energy_charge ?? 0).toFixed(2)}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#94a3b8' }}>
                           <span>Fixed Demand Charge:</span>
-                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s.fixed_charge || 0).toFixed(2)}</strong>
+                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s?.fixed_charge ?? 0).toFixed(2)}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#94a3b8' }}>
                           <span>FPPPA Surcharge:</span>
-                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s.fpppa_charge || 0).toFixed(2)}</strong>
+                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s?.fpppa_charge ?? 0).toFixed(2)}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', color: '#94a3b8' }}>
                           <span>Assam Electricity Duty (5%):</span>
-                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s.electricity_duty || 0).toFixed(2)}</strong>
+                          <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>₹{Number(s?.electricity_duty ?? 0).toFixed(2)}</strong>
                         </div>
                       </div>
                     </div>
@@ -908,9 +941,10 @@ export function ApdclBillingSection({
                 onClick={() => {
                   setCalcImportKwh('180');
                   setCalcExportKwh('0');
+                  setCalcSelfConsumedKwh('0');
                   setCalcSanctionedKw('3.0');
                   setCalcMode('net_metering');
-                  runBillCalculation('180', '0', '3.0', 'net_metering');
+                  runBillCalculation('180', '0', '3.0', 'net_metering', '0');
                 }}
                 style={{
                   padding: '0.4rem 0.75rem',
@@ -930,9 +964,10 @@ export function ApdclBillingSection({
                 onClick={() => {
                   setCalcImportKwh('150');
                   setCalcExportKwh('100');
+                  setCalcSelfConsumedKwh('50');
                   setCalcSanctionedKw('3.0');
                   setCalcMode('net_metering');
-                  runBillCalculation('150', '100', '3.0', 'net_metering');
+                  runBillCalculation('150', '100', '3.0', 'net_metering', '50');
                 }}
                 style={{
                   padding: '0.4rem 0.75rem',
@@ -952,9 +987,10 @@ export function ApdclBillingSection({
                 onClick={() => {
                   setCalcImportKwh('100');
                   setCalcExportKwh('180');
+                  setCalcSelfConsumedKwh('80');
                   setCalcSanctionedKw('3.0');
                   setCalcMode('net_metering');
-                  runBillCalculation('100', '180', '3.0', 'net_metering');
+                  runBillCalculation('100', '180', '3.0', 'net_metering', '80');
                 }}
                 style={{
                   padding: '0.4rem 0.75rem',
@@ -974,9 +1010,10 @@ export function ApdclBillingSection({
                 onClick={() => {
                   setCalcImportKwh('350');
                   setCalcExportKwh('0');
+                  setCalcSelfConsumedKwh('0');
                   setCalcSanctionedKw('3.0');
                   setCalcMode('net_metering');
-                  runBillCalculation('350', '0', '3.0', 'net_metering');
+                  runBillCalculation('350', '0', '3.0', 'net_metering', '0');
                 }}
                 style={{
                   padding: '0.4rem 0.75rem',
@@ -994,7 +1031,7 @@ export function ApdclBillingSection({
             </div>
 
             {/* Input Controls */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
               <div>
                 <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '3px' }}>
                   Monthly Import (kWh)
@@ -1006,7 +1043,7 @@ export function ApdclBillingSection({
                   value={calcImportKwh}
                   onChange={(e) => {
                     setCalcImportKwh(e.target.value);
-                    runBillCalculation(e.target.value, calcExportKwh, calcSanctionedKw, calcMode);
+                    runBillCalculation(e.target.value, calcExportKwh, calcSanctionedKw, calcMode, calcSelfConsumedKwh);
                   }}
                   style={{
                     width: '100%',
@@ -1032,7 +1069,34 @@ export function ApdclBillingSection({
                   value={calcExportKwh}
                   onChange={(e) => {
                     setCalcExportKwh(e.target.value);
-                    runBillCalculation(calcImportKwh, e.target.value, calcSanctionedKw, calcMode);
+                    runBillCalculation(calcImportKwh, e.target.value, calcSanctionedKw, calcMode, calcSelfConsumedKwh);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.45rem 0.65rem',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: '5px',
+                    color: '#f8fafc',
+                    fontSize: '0.82rem',
+                    fontFamily: 'monospace'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '3px' }}>
+                  Self-Consumed Solar (kWh)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Auto-derived if blank"
+                  value={calcSelfConsumedKwh}
+                  onChange={(e) => {
+                    setCalcSelfConsumedKwh(e.target.value);
+                    runBillCalculation(calcImportKwh, calcExportKwh, calcSanctionedKw, calcMode, e.target.value);
                   }}
                   style={{
                     width: '100%',
@@ -1058,7 +1122,7 @@ export function ApdclBillingSection({
                   value={calcSanctionedKw}
                   onChange={(e) => {
                     setCalcSanctionedKw(e.target.value);
-                    runBillCalculation(calcImportKwh, calcExportKwh, e.target.value, calcMode);
+                    runBillCalculation(calcImportKwh, calcExportKwh, e.target.value, calcMode, calcSelfConsumedKwh);
                   }}
                   style={{
                     width: '100%',
@@ -1081,7 +1145,7 @@ export function ApdclBillingSection({
                   value={calcMode}
                   onChange={(e) => {
                     setCalcMode(e.target.value);
-                    runBillCalculation(calcImportKwh, calcExportKwh, calcSanctionedKw, e.target.value);
+                    runBillCalculation(calcImportKwh, calcExportKwh, calcSanctionedKw, e.target.value, calcSelfConsumedKwh);
                   }}
                   style={{
                     width: '100%',

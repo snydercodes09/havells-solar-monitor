@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Menu } from 'lucide-react';
 import { useSolarTelemetry } from './hooks/useSolarTelemetry';
 import { Sidebar } from './components/Sidebar';
 import { SolarPanelCard } from './components/SolarPanelCard';
@@ -12,6 +13,11 @@ import { PersistentHistorySection } from './components/PersistentHistorySection'
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsModal } from './components/SettingsModal';
 import './App.css';
+
+const fmtNum = (val, decimals = 1, unit = '', fallback = '—') =>
+  val !== null && val !== undefined && !Number.isNaN(Number(val))
+    ? `${Number(val).toFixed(decimals)}${unit ? ` ${unit}` : ''}`
+    : fallback;
 
 const TAB_METADATA = {
   overview: {
@@ -87,10 +93,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'flow' | 'apdcl' | 'history' | 'system' | 'settings'
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const ratedCapacityW = Number(config?.rated_capacity_w || 3300);
-  const activePowerW = Number(liveData?.active_power || 0);
-  const capacityPct = Math.min(100, Math.round((activePowerW / ratedCapacityW) * 100));
+  const safeActiveW = Number(liveData?.active_power) || 0;
+  const safeRatedW = Number(config?.rated_capacity_w) || 3300;
+  const capacityPct = safeRatedW > 0 ? Math.min(100, Math.max(0, Math.round((safeActiveW / safeRatedW) * 100))) : 0;
 
   const hasCtMeter = config?.has_ct_meter === true || config?.has_ct_meter === 'true';
 
@@ -139,25 +146,48 @@ export default function App() {
 
   return (
     <div className="solary-layout">
-      {/* 1. Left Vertical Navigation Rail */}
+      {/* Semi-transparent Backdrop for Mobile Drawer */}
+      {isMobileNavOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* 1. Left Vertical Navigation Rail (Sticky Desktop / Drawer Mobile) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenSettings={() => setIsSettingsOpen(true)}
         liveStatus={connStatus}
+        isOpen={isMobileNavOpen}
+        onClose={() => setIsMobileNavOpen(false)}
       />
 
       {/* 2. Main Dashboard Area */}
       <main className="solary-main main-content">
         {/* Top Context Header */}
         <header className="top-header">
-          <div className="header-title-group">
-            <div className="eyebrow-row">
-              <span className="brand-badge">HAVELLS ENVIRO PRO GTi</span>
-              <span className="capacity-chip">{(ratedCapacityW / 1000).toFixed(1)} kW Single-Phase On-Grid</span>
+          <div className="flex-align gap-12">
+            <button
+              type="button"
+              className="menu-toggle-btn"
+              onClick={() => setIsMobileNavOpen(true)}
+              aria-label="Open navigation menu drawer"
+            >
+              <Menu size={18} />
+              <span>Menu</span>
+            </button>
+
+            <div className="header-title-group">
+              <div className="eyebrow-row">
+                <span className="brand-badge">HAVELLS ENVIRO PRO GTi</span>
+                <span className="capacity-chip">{(safeRatedW / 1000).toFixed(1)} kW Single-Phase On-Grid</span>
+              </div>
+              <h1>{currentTabMeta.title}</h1>
+              <p className="subtitle">{currentTabMeta.description}</p>
             </div>
-            <h1>{currentTabMeta.title}</h1>
-            <p className="subtitle">{currentTabMeta.description}</p>
           </div>
 
           <div className="status-indicators">
@@ -176,8 +206,8 @@ export default function App() {
                 <span className="status-primary">
                   {liveData?.status === 'Inverter Asleep / Offline' || liveData?.active_power === null
                     ? 'Inverter Asleep (Night)'
-                    : activePowerW > 0
-                    ? `Generating (${(activePowerW / 1000).toFixed(2)} kW)`
+                    : safeActiveW > 0
+                    ? `Generating (${(safeActiveW / 1000).toFixed(2)} kW)`
                     : connStatus === 'live_ws'
                     ? '1 Hz Stream Live'
                     : connStatus === 'polling_fallback'
@@ -207,16 +237,16 @@ export default function App() {
           <article className="kpi-card">
             <div className="kpi-header">
               <span className="kpi-label">Instant AC Generation</span>
-              <span className={`kpi-badge ${activePowerW > 0 ? 'emerald' : 'neutral'}`}>
-                {activePowerW > 0 ? `${capacityPct}% of Rated Peak` : 'Standby / Offline'}
+              <span className={`kpi-badge ${safeActiveW > 0 ? 'emerald' : 'neutral'}`}>
+                {safeActiveW > 0 ? `${capacityPct}% of Rated Peak` : 'Standby / Offline'}
               </span>
             </div>
             <div className="kpi-value-row">
               {liveData?.active_power !== null && liveData?.active_power !== undefined ? (
                 <>
-                  <span className="kpi-value">{(activePowerW / 1000).toFixed(2)}</span>
+                  <span className="kpi-value">{(safeActiveW / 1000).toFixed(2)}</span>
                   <span className="kpi-unit">kW</span>
-                  <span className="kpi-secondary">({activePowerW.toFixed(0)} W)</span>
+                  <span className="kpi-secondary">({safeActiveW.toFixed(0)} W)</span>
                 </>
               ) : (
                 <>
