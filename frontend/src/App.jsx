@@ -24,11 +24,11 @@ const TAB_METADATA = {
   },
   apdcl: {
     title: 'APDCL LT-II Net-Metering & Savings',
-    description: 'Progressive telescopic slab offset (₹5.40 / ₹6.65 / ₹7.65 per kWh), fixed demand charges, and ROI tracking.'
+    description: 'Verified AERC FY 2026–27 Domestic-A tariff schedule (Slabs ₹4.25–₹8.19/kWh), GoA targeted subsidy, and APPC settlement.'
   },
   billing: {
     title: 'APDCL LT-II Net-Metering & Savings',
-    description: 'Progressive telescopic slab offset (₹5.40 / ₹6.65 / ₹7.65 per kWh), fixed demand charges, and ROI tracking.'
+    description: 'Verified AERC FY 2026–27 Domestic-A tariff schedule (Slabs ₹4.25–₹8.19/kWh), GoA targeted subsidy, and APPC settlement.'
   },
   diagnostics: {
     title: 'Inverter Health & Safety Diagnostics',
@@ -74,7 +74,15 @@ export default function App() {
     saveConfig,
     availablePorts,
     historyLogs,
-    isDbConnected
+    isDbConnected,
+    meterReadings,
+    meterSyncSummary,
+    addMeterReading,
+    deleteMeterReading,
+    tariffConfig,
+    billingReconciliation,
+    updateTariffConfig,
+    calculateCustomBill
   } = useSolarTelemetry();
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'flow' | 'apdcl' | 'history' | 'system' | 'settings'
@@ -84,10 +92,14 @@ export default function App() {
   const activePowerW = Number(liveData?.active_power || 0);
   const capacityPct = Math.min(100, Math.round((activePowerW / ratedCapacityW) * 100));
 
+  const hasCtMeter = config?.has_ct_meter === true || config?.has_ct_meter === 'true';
+
   const isSimulation = useMemo(() => {
+    const isSimConfig = config?.simulation_mode === true || config?.simulation_mode === 'true';
+    const isSimLive = liveData?.is_simulation === true || liveData?.is_simulation === 'true';
     const src = String(liveData?.source || '').toLowerCase();
     const st = String(liveData?.status || '').toLowerCase();
-    return Boolean(config?.simulation_mode) || src.includes('mock') || src.includes('sim') || st.includes('sim') || Boolean(liveData?.is_simulation);
+    return isSimConfig || isSimLive || src.includes('mock') || src.includes('sim') || st.includes('simulator');
   }, [liveData?.source, liveData?.status, liveData?.is_simulation, config?.simulation_mode]);
 
   const gridStatus = useMemo(() => {
@@ -137,7 +149,7 @@ export default function App() {
 
       {/* 2. Main Dashboard Area */}
       <main className="solary-main main-content">
-        {/* Top Context Header (F-04) */}
+        {/* Top Context Header */}
         <header className="top-header">
           <div className="header-title-group">
             <div className="eyebrow-row">
@@ -162,8 +174,10 @@ export default function App() {
               <span className="dot"></span>
               <div className="status-pill-text">
                 <span className="status-primary">
-                  {liveData?.status === 'Inverter Asleep / Offline' || Number(liveData?.grid_voltage || 0) === 0
+                  {liveData?.status === 'Inverter Asleep / Offline' || liveData?.active_power === null
                     ? 'Inverter Asleep (Night)'
+                    : activePowerW > 0
+                    ? `Generating (${(activePowerW / 1000).toFixed(2)} kW)`
                     : connStatus === 'live_ws'
                     ? '1 Hz Stream Live'
                     : connStatus === 'polling_fallback'
@@ -171,7 +185,7 @@ export default function App() {
                     : 'Reconnecting...'}
                 </span>
                 <span className="status-sub">
-                  {liveData?.source || (isSimulation ? 'Simulation Mode' : 'Hardware Direct')}
+                  {liveData?.source || 'Hardware Direct (Wi-Fi 502)'}
                 </span>
               </div>
             </div>
@@ -193,38 +207,64 @@ export default function App() {
           <article className="kpi-card">
             <div className="kpi-header">
               <span className="kpi-label">Instant AC Generation</span>
-              <span className="kpi-badge emerald">{capacityPct}% of Rated Peak</span>
+              <span className={`kpi-badge ${activePowerW > 0 ? 'emerald' : 'neutral'}`}>
+                {activePowerW > 0 ? `${capacityPct}% of Rated Peak` : 'Standby / Offline'}
+              </span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-value">{(activePowerW / 1000).toFixed(2)}</span>
-              <span className="kpi-unit">kW</span>
-              <span className="kpi-secondary">({activePowerW.toFixed(0)} W)</span>
+              {liveData?.active_power !== null && liveData?.active_power !== undefined ? (
+                <>
+                  <span className="kpi-value">{(activePowerW / 1000).toFixed(2)}</span>
+                  <span className="kpi-unit">kW</span>
+                  <span className="kpi-secondary">({activePowerW.toFixed(0)} W)</span>
+                </>
+              ) : (
+                <>
+                  <span className="kpi-value">—</span>
+                  <span className="kpi-unit">kW</span>
+                  <span className="kpi-secondary">(Inverter Asleep)</span>
+                </>
+              )}
             </div>
             <div className="kpi-progress-track" aria-hidden="true">
               <div className="kpi-progress-fill emerald" style={{ width: `${capacityPct}%` }} />
             </div>
             <p className="kpi-description">
-              Converting DC string input at <strong>{liveData?.bus_voltage || 380}V DC bus</strong> into synchronized AC power.
+              {liveData?.bus_voltage !== null && liveData?.bus_voltage !== undefined ? (
+                <>Converting DC string input at <strong>{liveData.bus_voltage}V DC bus</strong> into synchronized AC power.</>
+              ) : (
+                <>Inverter contactors open. No AC injection during night sleep mode (0V DC solar array).</>
+              )}
             </p>
           </article>
 
-          {/* Card 2: Dual-MPPT String Balance */}
+          {/* Card 2: Solar DC Input (PV1) */}
           <article className="kpi-card">
             <div className="kpi-header">
-              <span className="kpi-label">Dual-MPPT String Balance</span>
-              <span className={`kpi-badge ${mpptBalance.deltaPct > 20 ? 'amber' : 'blue'}`}>
-                {mpptBalance.p1Pct}% / {mpptBalance.p2Pct}% Split
+              <span className="kpi-label">Solar DC Input (PV1)</span>
+              <span className="kpi-badge emerald">
+                {liveData?.pv1_power !== null && Number(liveData?.pv1_power) > 0 ? 'Single-String 8-Panel Setup' : 'Standby / Asleep'}
               </span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-value">
-                {((Number(liveData?.pv1_power || 0) + Number(liveData?.pv2_power || 0)) / 1000).toFixed(2)}
-              </span>
-              <span className="kpi-unit">kW DC</span>
+              {liveData?.pv1_power !== null && liveData?.pv1_power !== undefined ? (
+                <>
+                  <span className="kpi-value">
+                    {(Number(liveData.pv1_power) / 1000).toFixed(2)}
+                  </span>
+                  <span className="kpi-unit">kW DC</span>
+                  <span className="kpi-secondary">({Number(liveData.pv1_power).toFixed(0)} W)</span>
+                </>
+              ) : (
+                <>
+                  <span className="kpi-value">—</span>
+                  <span className="kpi-unit">kW DC</span>
+                  <span className="kpi-secondary">(0 W DC)</span>
+                </>
+              )}
             </div>
             <p className="kpi-description">
-              PV1: <strong>{liveData?.pv1_voltage || 0}V · {liveData?.pv1_current || 0}A</strong> | PV2:{' '}
-              <strong>{liveData?.pv2_voltage || 0}V · {liveData?.pv2_current || 0}A</strong> (Optimal MPPT: 120V–450V).
+              PV1: <strong>{liveData?.pv1_voltage !== null && liveData?.pv1_voltage !== undefined ? `${liveData.pv1_voltage}V · ${liveData.pv1_current}A` : '— V'}</strong> (MPPT Range 120V–450V). MPPT 2 unconnected.
             </p>
           </article>
 
@@ -235,15 +275,25 @@ export default function App() {
               <span className={`kpi-badge ${gridStatus.tone}`}>{gridStatus.label}</span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-value">{Number(liveData?.grid_voltage || 0).toFixed(1)}</span>
-              <span className="kpi-unit">V AC</span>
-              <span className="kpi-secondary">@ {Number(liveData?.grid_frequency || 0).toFixed(2)} Hz</span>
+              {liveData?.grid_voltage !== null && liveData?.grid_voltage !== undefined ? (
+                <>
+                  <span className="kpi-value">{Number(liveData.grid_voltage).toFixed(1)}</span>
+                  <span className="kpi-unit">V AC</span>
+                  <span className="kpi-secondary">@ {Number(liveData.grid_frequency || 50.0).toFixed(2)} Hz</span>
+                </>
+              ) : (
+                <>
+                  <span className="kpi-value">—</span>
+                  <span className="kpi-unit">V AC</span>
+                  <span className="kpi-secondary">@ — Hz</span>
+                </>
+              )}
             </div>
             <p className="kpi-description">
               {Number(liveData?.grid_voltage || 0) > 0 ? (
-                <>Exporting <strong>{Number(liveData?.grid_current || 0).toFixed(1)} A</strong> to single-phase feeder. {gridStatus.hint}.</>
+                <>AC feeder synchronized. Household net import/export is unmeasured without CT meter.</>
               ) : (
-                <>Inverter contactors open. No AC injection during night sleep mode.</>
+                <>Inverter contactors open. No AC line injection during night sleep mode.</>
               )}
             </p>
           </article>
@@ -255,14 +305,23 @@ export default function App() {
               <span className={`kpi-badge ${thermalStatus.tone}`}>IGBT {thermalStatus.label}</span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-value">{Number(liveData?.today_energy || summary?.today_kwh || 0).toFixed(2)}</span>
-              <span className="kpi-unit">kWh</span>
-              <span className="kpi-secondary">
-                (≈ ₹{((Number(liveData?.today_energy || summary?.today_kwh || 0)) * Number(config?.tariff_rate || 7.65)).toFixed(0)} saved)
-              </span>
+              {liveData?.today_energy !== null || summary?.today_kwh !== null ? (
+                <>
+                  <span className="kpi-value">{Number(liveData?.today_energy || summary?.today_kwh || 0).toFixed(2)}</span>
+                  <span className="kpi-unit">kWh</span>
+                  <span className="kpi-secondary">
+                    (≈ ₹{((Number(liveData?.today_energy || summary?.today_kwh || 0)) * Number(config?.tariff_rate || 7.65)).toFixed(0)} saved)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="kpi-value">—</span>
+                  <span className="kpi-unit">kWh</span>
+                </>
+              )}
             </div>
             <p className="kpi-description">
-              Cabin temp <strong>{liveData?.inner_temp || 0}°C</strong> (Thermal derating begins above 60°C heatsink).
+              Cabin temp <strong>{liveData?.inner_temp !== null && liveData?.inner_temp !== undefined ? `${liveData.inner_temp}°C` : '—'}</strong> (Thermal derating begins above 60°C heatsink).
             </p>
           </article>
         </section>
@@ -271,7 +330,7 @@ export default function App() {
         {activeTab === 'overview' && (
           <div className="solary-dashboard-grid fade-in">
             {/* Top Row: Solar Panel Hero + Monthly Generation */}
-            <div className="grid-row-top" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: '1.25rem', marginBottom: '1.25rem' }}>
+            <div className="grid-row-top">
               <SolarPanelCard
                 liveData={liveData}
                 config={config}
@@ -285,11 +344,12 @@ export default function App() {
             </div>
 
             {/* Bottom Row: Energy Produced Spline Chart + Panel Points */}
-            <div className="grid-row-bottom" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(300px, 1fr)', gap: '1.25rem' }}>
+            <div className="grid-row-bottom">
               <EnergyProductionChart
                 todayCurve={todayCurve}
                 dailyHistory={dailyHistory}
                 liveData={liveData}
+                config={config}
               />
               <StringPointsList
                 liveData={liveData}
@@ -306,10 +366,21 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= VIEW 3: APDCL BILLING ================= */}
+        {/* ================= VIEW 3: APDCL BILLING & METER SYNC ================= */}
         {(activeTab === 'apdcl' || activeTab === 'billing') && (
           <div className="fade-in">
-            <ApdclBillingSection summary={summary} config={config} />
+            <ApdclBillingSection
+              summary={summary}
+              config={config}
+              meterReadings={meterReadings}
+              meterSyncSummary={meterSyncSummary}
+              onAddReading={addMeterReading}
+              onDeleteReading={deleteMeterReading}
+              tariffConfig={tariffConfig}
+              billingReconciliation={billingReconciliation}
+              onUpdateTariffConfig={updateTariffConfig}
+              onCalculateCustomBill={calculateCustomBill}
+            />
           </div>
         )}
 

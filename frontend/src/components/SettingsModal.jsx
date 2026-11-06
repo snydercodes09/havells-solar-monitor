@@ -9,22 +9,28 @@ export function SettingsModal({
   onSave = () => {}
 }) {
   const [tariff, setTariff] = useState(7.65);
-  const [isSim, setIsSim] = useState(true);
+  const [isSim, setIsSim] = useState(false);
   const [selectedPort, setSelectedPort] = useState('');
   const [baudRate, setBaudRate] = useState(9600);
   const [slaveId, setSlaveId] = useState(1);
   const [ratedCapacity, setRatedCapacity] = useState(3300);
+  const [hasCtMeter, setHasCtMeter] = useState(false);
+  const [meterModel, setMeterModel] = useState('None');
+  const [meterSlaveId, setMeterSlaveId] = useState(2);
   const [feedback, setFeedback] = useState({ tone: '', text: '' });
 
   // Synchronize local form state whenever modal opens or parent config updates
   useEffect(() => {
     if (config) {
       setTariff(config.tariff_rate !== undefined ? config.tariff_rate : 7.65);
-      setIsSim(config.simulation_mode !== undefined ? Boolean(config.simulation_mode) : true);
+      setIsSim(config.simulation_mode === true || config.simulation_mode === 'true');
       setSelectedPort(config.selected_com_port || config.modbus_port || '');
       setBaudRate(config.baud_rate !== undefined ? Number(config.baud_rate) : 9600);
       setSlaveId(config.slave_id !== undefined ? Number(config.slave_id) : 1);
       setRatedCapacity(config.rated_capacity_w !== undefined ? Number(config.rated_capacity_w) : 3300);
+      setHasCtMeter(config.has_ct_meter === true || config.has_ct_meter === 'true');
+      setMeterModel(config.meter_model || 'None');
+      setMeterSlaveId(config.meter_slave_id !== undefined ? Number(config.meter_slave_id) : 2);
       setFeedback({ tone: '', text: '' });
     }
   }, [config, isOpen]);
@@ -36,6 +42,7 @@ export function SettingsModal({
     const parsedBaud = parseInt(baudRate, 10);
     const parsedSlave = parseInt(slaveId, 10);
     const parsedCapacity = parseFloat(ratedCapacity);
+    const parsedMeterSlave = parseInt(meterSlaveId, 10);
 
     if (isNaN(parsedTariff) || parsedTariff <= 0 || parsedTariff > 50) {
       setFeedback({ tone: 'error', text: 'Tariff must be a valid number between ₹1.00 and ₹50.00' });
@@ -60,7 +67,10 @@ export function SettingsModal({
         modbus_port: selectedPort || '',
         baud_rate: parsedBaud,
         slave_id: parsedSlave,
-        rated_capacity_w: parsedCapacity
+        rated_capacity_w: parsedCapacity,
+        has_ct_meter: Boolean(hasCtMeter),
+        meter_model: meterModel,
+        meter_slave_id: isNaN(parsedMeterSlave) ? 2 : parsedMeterSlave
       };
       
       const res = await onSave(payload);
@@ -193,7 +203,7 @@ export function SettingsModal({
               </span>
             )}
 
-            <div className="grid-two-cols-settings" style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="grid-two-cols-settings" style={{ marginTop: '14px' }}>
               <div>
                 <label className="field-sublabel" style={{ fontSize: '11px', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
                   Modbus Baud Rate
@@ -225,6 +235,64 @@ export function SettingsModal({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Setting 4: External Bidirectional CT Meter (PCC) */}
+          <div className="setting-field-card">
+            <div className="field-label-row">
+              <div className="flex-align gap-6">
+                <ShieldCheck size={15} className="text-cyan" />
+                <label className="field-title">External Bidirectional CT Meter (PCC)</label>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={hasCtMeter}
+                  onChange={(e) => setHasCtMeter(e.target.checked)}
+                />
+                <span className="slider-round"></span>
+              </label>
+            </div>
+            <p className="field-desc">
+              {hasCtMeter ? (
+                <>External smart meter enabled on secondary Modbus Slave ID. Reads grid import/export at PCC to compute hardware-measured home consumption.</>
+              ) : (
+                <>Operating in <strong>Inverter-Only Truth Mode</strong>. Displays only verified Havells inverter measurements. Household load and grid import/export are unmeasured (no fake estimates).</>
+              )}
+            </p>
+
+            {hasCtMeter && (
+              <div className="grid-two-cols-settings" style={{ marginTop: '14px' }}>
+                <div>
+                  <label className="field-sublabel" style={{ fontSize: '11px', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
+                    Meter Hardware Model
+                  </label>
+                  <select
+                    className="modal-select-input font-mono"
+                    value={meterModel}
+                    onChange={(e) => setMeterModel(e.target.value)}
+                  >
+                    <option value="Chint DDSU666">Chint DDSU666 (RS485)</option>
+                    <option value="Eastron SDM120">Eastron SDM120 (Modbus)</option>
+                    <option value="Acrel ACR10R">Acrel ACR10R-D16TE</option>
+                    <option value="Custom Modbus">Generic Modbus Bidirectional</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-sublabel" style={{ fontSize: '11px', color: '#94A3B8', display: 'block', marginBottom: '4px' }}>
+                    Meter Slave ID
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="247"
+                    className="modal-text-input font-mono"
+                    value={meterSlaveId}
+                    onChange={(e) => setMeterSlaveId(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Plant Reference Metadata */}

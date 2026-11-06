@@ -23,8 +23,11 @@ export function SettingsSection({
   onSave = () => {}
 }) {
   const [tariff, setTariff] = useState(7.65);
-  const [isSim, setIsSim] = useState(true);
+  const [isSim, setIsSim] = useState(false);
   const [selectedPort, setSelectedPort] = useState('');
+  const [hasCtMeter, setHasCtMeter] = useState(false);
+  const [meterModel, setMeterModel] = useState('None');
+  const [meterSlaveId, setMeterSlaveId] = useState(2);
   const [savedToast, setSavedToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -32,8 +35,11 @@ export function SettingsSection({
   useEffect(() => {
     if (config) {
       setTariff(config.tariff_rate !== undefined ? config.tariff_rate : 7.65);
-      setIsSim(config.simulation_mode !== undefined ? config.simulation_mode : true);
+      setIsSim(config.simulation_mode === true || config.simulation_mode === 'true');
       setSelectedPort(config.selected_com_port || '');
+      setHasCtMeter(config.has_ct_meter === true || config.has_ct_meter === 'true');
+      setMeterModel(config.meter_model || 'None');
+      setMeterSlaveId(config.meter_slave_id !== undefined ? Number(config.meter_slave_id) : 2);
     }
   }, [config]);
 
@@ -42,7 +48,10 @@ export function SettingsSection({
     await onSave({
       tariff_rate: parseFloat(tariff) || 7.65,
       simulation_mode: Boolean(isSim),
-      selected_com_port: selectedPort || ''
+      selected_com_port: selectedPort || '',
+      has_ct_meter: Boolean(hasCtMeter),
+      meter_model: meterModel,
+      meter_slave_id: parseInt(meterSlaveId, 10) || 2
     });
     setIsSaving(false);
     setSavedToast(true);
@@ -219,6 +228,59 @@ export function SettingsSection({
                 <span className="meta-label">Modbus Slave ID</span>
                 <span className="meta-val font-mono">0x01</span>
               </div>
+            </div>
+
+            {/* CT Meter Sub-section */}
+            <div className="form-group-custom" style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="toggle-container-box">
+                <div>
+                  <label className="settings-label" style={{ marginBottom: 2 }}>
+                    External Bidirectional CT Meter (PCC)
+                  </label>
+                  <p className="settings-hint" style={{ marginBottom: 0 }}>
+                    {hasCtMeter
+                      ? 'Enabled on secondary Modbus ID. Calculates hardware-measured household consumption.'
+                      : 'Disabled: Operating in Inverter-Only Truth Mode without guessed household loads.'}
+                  </p>
+                </div>
+                <label className="custom-switch">
+                  <input
+                    type="checkbox"
+                    checked={hasCtMeter}
+                    onChange={(e) => setHasCtMeter(e.target.checked)}
+                  />
+                  <span className="slider-round"></span>
+                </label>
+              </div>
+
+              {hasCtMeter && (
+                <div className="grid-two-cols-settings" style={{ marginTop: '12px' }}>
+                  <div>
+                    <label className="settings-label" style={{ fontSize: '11px' }}>Meter Model</label>
+                    <select
+                      className="settings-select-field font-mono"
+                      value={meterModel}
+                      onChange={(e) => setMeterModel(e.target.value)}
+                    >
+                      <option value="Chint DDSU666">Chint DDSU666</option>
+                      <option value="Eastron SDM120">Eastron SDM120</option>
+                      <option value="Acrel ACR10R">Acrel ACR10R</option>
+                      <option value="Custom Modbus">Generic Modbus</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="settings-label" style={{ fontSize: '11px' }}>Meter Slave ID</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="247"
+                      className="settings-input-field font-mono"
+                      value={meterSlaveId}
+                      onChange={(e) => setMeterSlaveId(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

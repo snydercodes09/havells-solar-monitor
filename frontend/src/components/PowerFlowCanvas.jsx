@@ -54,37 +54,56 @@ export function PowerFlowCanvas({
     };
   }, [viewMode]);
 
-  const activePower = Math.round(Number(propActivePower !== undefined ? propActivePower : liveData?.active_power) || 0);
-  const pv1Power = Math.round(Number(propPv1Power !== undefined ? propPv1Power : liveData?.pv1_power) || 0);
-  const pv2Power = Math.round(Number(propPv2Power !== undefined ? propPv2Power : liveData?.pv2_power) || 0);
+  const hasCtMeter = config?.has_ct_meter === true || config?.has_ct_meter === 'true' || liveData?.has_ct_meter === true;
+  const isSimulation = config?.simulation_mode === true || config?.simulation_mode === 'true' || liveData?.is_simulation === true;
 
-  // Dynamic residential household consumption profile (evening lights/fans ~880W, morning ~750W, daytime ~550W, night ~420W)
-  const currentHour = new Date().getHours() + new Date().getMinutes() / 60;
-  const defaultBaseLoad = (currentHour >= 17 && currentHour < 23) ? 880 : (currentHour >= 6 && currentHour < 9) ? 750 : (currentHour >= 9 && currentHour < 17) ? 550 : 420;
-  const fallbackHomeLoad = Math.round(defaultBaseLoad + Math.sin(Date.now() / 3000) * 25);
+  const activePower = liveData?.active_power !== null && liveData?.active_power !== undefined
+    ? Math.round(Number(propActivePower !== undefined ? propActivePower : liveData.active_power))
+    : null;
+  const pv1Power = liveData?.pv1_power !== null && liveData?.pv1_power !== undefined
+    ? Math.round(Number(propPv1Power !== undefined ? propPv1Power : liveData.pv1_power))
+    : null;
+  const pv2Power = liveData?.pv2_power !== null && liveData?.pv2_power !== undefined
+    ? Math.round(Number(propPv2Power !== undefined ? propPv2Power : liveData.pv2_power))
+    : null;
 
-  const homeLoad = liveData?.home_load !== undefined ? Math.round(Number(liveData.home_load)) : fallbackHomeLoad;
-  const gridImport = liveData?.grid_import !== undefined ? Math.round(Number(liveData.grid_import)) : Math.max(0, homeLoad - activePower);
-  const gridExport = liveData?.grid_export !== undefined ? Math.round(Number(liveData.grid_export)) : Math.max(0, activePower - homeLoad);
+  // Inverter-Only Truth Mode: Household load and grid import/export are unmeasured without a physical CT meter
+  let homeLoad = null;
+  let gridImport = null;
+  let gridExport = null;
+
+  if (hasCtMeter) {
+    homeLoad = liveData?.home_load !== null && liveData?.home_load !== undefined ? Math.round(Number(liveData.home_load)) : null;
+    gridImport = liveData?.grid_import !== null && liveData?.grid_import !== undefined ? Math.round(Number(liveData.grid_import)) : null;
+    gridExport = liveData?.grid_export !== null && liveData?.grid_export !== undefined ? Math.round(Number(liveData.grid_export)) : null;
+  }
 
   const tariffRate = Number(config?.tariff_rate) || 7.65;
-  const todayKwh = Number(summary?.today_kwh) || Number(liveData?.today_kwh) || 14.85;
-  const todaySavings = Math.round(todayKwh * tariffRate);
+  const todayKwh = summary?.today_kwh !== null && summary?.today_kwh !== undefined
+    ? Number(summary.today_kwh)
+    : (liveData?.today_energy !== null && liveData?.today_energy !== undefined ? Number(liveData.today_energy) : null);
+  const todaySavings = todayKwh !== null ? Math.round(todayKwh * tariffRate) : null;
 
-  // Speed of animated energy particles
-  const solarParticleStyle = activePower > 0 ? { animationDuration: `${Math.max(0.6, 2.8 - (activePower / 1600))}s` } : { display: 'none' };
-  const gridExportParticleStyle = gridExport > 0 ? { animationDuration: `${Math.max(0.7, 2.5 - (gridExport / 1500))}s` } : { display: 'none' };
-  const gridImportParticleStyle = gridImport > 0 ? { animationDuration: `${Math.max(0.7, 2.5 - (gridImport / 1000))}s` } : { display: 'none' };
-  const houseParticleStyle = homeLoad > 0 ? { animationDuration: `${Math.max(0.8, 2.5 - (homeLoad / 1000))}s` } : { display: 'none' };
+  const fmt = (val, decimals = 1, unit = '') => {
+    if (val === null || val === undefined || isNaN(Number(val))) return '—';
+    return `${Number(val).toFixed(decimals)}${unit ? ' ' + unit : ''}`;
+  };
 
-  // Calculate home load progress percentage
-  const loadPercentage = activePower > 0
-    ? Math.min(100, Math.round((homeLoad / activePower) * 100))
-    : Math.min(100, Math.round((homeLoad / 1500) * 100));
+  // Speed of animated energy particles (reflects verified generation)
+  const solarParticleStyle = (activePower && activePower > 0) ? { animationDuration: `${Math.max(0.6, 2.8 - (activePower / 1600))}s` } : { display: 'none' };
+  const gridExportParticleStyle = (activePower && activePower > 0) ? { animationDuration: `${Math.max(0.7, 2.5 - (activePower / 1500))}s` } : { display: 'none' };
+  const gridImportParticleStyle = (gridImport && gridImport > 0) ? { animationDuration: `${Math.max(0.7, 2.5 - (gridImport / 1000))}s` } : { display: 'none' };
+  const houseParticleStyle = (homeLoad && homeLoad > 0) ? { animationDuration: `${Math.max(0.8, 2.5 - (homeLoad / 1000))}s` } : { display: 'none' };
+
+  // Calculate home load progress percentage (strictly 0 if unmeasured)
+  const loadPercentage = homeLoad !== null
+    ? ((activePower && activePower > 0) ? Math.min(100, Math.round((homeLoad / activePower) * 100)) : Math.min(100, Math.round((homeLoad / 1500) * 100)))
+    : 0;
 
   return (
     <div className="iso-dashboard-container">
-      {/* ================= SECTION 1: TOP 4 SLEEK TELEMETRY CARDS (MATCHING IMAGE 2) ================= */}
+
+      {/* ================= SECTION 1: TOP 4 SLEEK TELEMETRY CARDS ================= */}
       <div className="iso-quick-cards-grid">
         {/* Card 1: Home */}
         <div className="iso-metric-card">
@@ -95,10 +114,18 @@ export function PowerFlowCanvas({
             </div>
           </div>
           <div className="metric-value-row">
-            <span className="metric-big-val">{(homeLoad / 1000).toFixed(1)} <small>kW</small></span>
-            <span className={`metric-trend-badge ${gridImport > 0 ? 'text-amber' : 'text-emerald'}`}>
-              {gridImport > 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-            </span>
+            {homeLoad !== null ? (
+              <>
+                <span className="metric-big-val">{(homeLoad / 1000).toFixed(1)} <small>kW</small></span>
+                <span className={`metric-trend-badge ${gridImport > 0 ? 'text-amber' : 'text-emerald'}`}>
+                  {gridImport > 0 ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
+                </span>
+              </>
+            ) : (
+              <span className="metric-big-val" style={{ fontSize: '1.25rem', color: '#94a3b8' }}>
+                — <small style={{ fontSize: '0.75rem' }}>Unmeasured</small>
+              </span>
+            )}
           </div>
           <div className="metric-progress-track">
             <div
@@ -107,8 +134,17 @@ export function PowerFlowCanvas({
             />
           </div>
           <div className="metric-footer-row">
-            <span className="metric-footer-val">{(todayKwh * 0.38).toFixed(1)} kWh</span>
-            <span className="metric-footer-label">{gridImport > 0 ? 'Grid Powered' : 'Solar Powered'}</span>
+            {homeLoad !== null ? (
+              <>
+                <span className="metric-footer-val">{homeLoad} W</span>
+                <span className="metric-footer-label">{gridImport > 0 ? 'Grid Powered' : 'Solar Powered'}</span>
+              </>
+            ) : (
+              <>
+                <span className="metric-footer-val">No CT Meter</span>
+                <span className="metric-footer-label">Direct Inverter Telemetry</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -121,10 +157,18 @@ export function PowerFlowCanvas({
             </div>
           </div>
           <div className="metric-value-row">
-            <span className="metric-big-val">{(activePower / 1000).toFixed(1)} <small>kW</small></span>
-            <span className="metric-trend-badge text-amber">
-              <ArrowUpRight size={14} />
-            </span>
+            {activePower !== null ? (
+              <>
+                <span className="metric-big-val">{(activePower / 1000).toFixed(2)} <small>kW</small></span>
+                <span className="metric-trend-badge text-amber">
+                  <ArrowUpRight size={14} />
+                </span>
+              </>
+            ) : (
+              <span className="metric-big-val" style={{ fontSize: '1.25rem', color: '#94a3b8' }}>
+                — <small style={{ fontSize: '0.75rem' }}>Standby</small>
+              </span>
+            )}
           </div>
           {/* Glowing sparkline curve */}
           <div className="sparkline-wrapper">
@@ -149,8 +193,8 @@ export function PowerFlowCanvas({
             </svg>
           </div>
           <div className="metric-footer-row">
-            <span className="metric-footer-val">{(gridExport / 1000).toFixed(1)} kW</span>
-            <span className="metric-footer-label">Exported to APDCL</span>
+            <span className="metric-footer-val">{activePower !== null ? `${(activePower / 1000).toFixed(2)} kW` : '—'}</span>
+            <span className="metric-footer-label">Verified Inverter Pac</span>
           </div>
         </div>
 
@@ -163,18 +207,18 @@ export function PowerFlowCanvas({
             </div>
           </div>
           <div className="metric-value-row">
-            <span className="metric-big-val">{liveData?.module_temp || 44.5} <small>°C</small></span>
-            <span className="metric-status-tag">97.6% Eff</span>
+            <span className="metric-big-val">{fmt(liveData?.module_temp, 1)} <small>°C</small></span>
+            <span className="metric-status-tag">{liveData?.inverter_efficiency ? `${liveData.inverter_efficiency}% Eff` : 'Standby'}</span>
           </div>
           <div className="metric-progress-track">
             <div
               className="metric-progress-fill bar-inverter"
-              style={{ width: `${Math.min(100, Math.round(((liveData?.module_temp || 44.5) / 75) * 100))}%` }}
+              style={{ width: `${Math.min(100, Math.round(((Number(liveData?.module_temp) || 30) / 75) * 100))}%` }}
             />
           </div>
           <div className="metric-footer-row">
-            <span className="metric-footer-val">{liveData?.grid_voltage || 232}V • {liveData?.grid_frequency || 50.0}Hz</span>
-            <span className="metric-footer-label">Synchronized</span>
+            <span className="metric-footer-val">{fmt(liveData?.grid_voltage, 1, 'V')} • {fmt(liveData?.grid_frequency, 2, 'Hz')}</span>
+            <span className="metric-footer-label">{Number(liveData?.grid_voltage || 0) > 0 ? 'Synchronized' : 'Offline'}</span>
           </div>
         </div>
 
@@ -183,28 +227,34 @@ export function PowerFlowCanvas({
           <div className="metric-header-row">
             <span className="metric-card-title">APDCL Grid</span>
             <div className="metric-card-icon-pill">
-              <Zap size={18} className={gridImport > 0 ? "text-amber" : (gridExport > 0 ? "text-emerald" : "text-muted")} />
+              <Zap size={18} className={(gridImport && gridImport > 0) ? "text-amber" : ((gridExport && gridExport > 0) ? "text-emerald" : "text-muted")} />
             </div>
           </div>
           <div className="metric-value-row">
-            <div className="grid-sub-rates">
-              <span className={`grid-rate-item ${gridImport > 0 ? 'active-grid-in' : ''}`}>
-                <strong className={gridImport > 0 ? 'text-amber' : ''}>
-                  {(gridImport / 1000).toFixed(1)} <small>kW</small>
-                </strong>
-                <span>import</span>
+            {hasCtMeter || isSimulation ? (
+              <div className="grid-sub-rates">
+                <span className={`grid-rate-item ${gridImport > 0 ? 'active-grid-in' : ''}`}>
+                  <strong className={gridImport > 0 ? 'text-amber' : ''}>
+                    {gridImport !== null ? (gridImport / 1000).toFixed(1) : '—'} <small>kW</small>
+                  </strong>
+                  <span>import</span>
+                </span>
+                <span className={`grid-rate-item ${gridExport > 0 ? 'active-grid-out' : ''}`}>
+                  <strong className={gridExport > 0 ? 'text-emerald' : ''}>
+                    {gridExport !== null ? (gridExport / 1000).toFixed(1) : '—'} <small>kW</small>
+                  </strong>
+                  <span>export</span>
+                </span>
+              </div>
+            ) : (
+              <span className="metric-big-val" style={{ fontSize: '1.05rem', color: '#94a3b8' }}>
+                PCC Flow Unmeasured
               </span>
-              <span className={`grid-rate-item ${gridExport > 0 ? 'active-grid-out' : ''}`}>
-                <strong className={gridExport > 0 ? 'text-emerald' : ''}>
-                  {(gridExport / 1000).toFixed(1)} <small>kW</small>
-                </strong>
-                <span>export</span>
-              </span>
-            </div>
+            )}
           </div>
           <div className="metric-cost-highlight">
-            <span className="cost-rupee-val">₹ {todaySavings.toLocaleString('en-IN')}</span>
-            <span className="cost-rupee-label">today saved (APDCL Slab 3)</span>
+            <span className="cost-rupee-val">{todaySavings !== null ? `₹ ${todaySavings.toLocaleString('en-IN')}` : '—'}</span>
+            <span className="cost-rupee-label">today yield value (₹{tariffRate}/unit)</span>
           </div>
         </div>
       </div>
@@ -321,11 +371,13 @@ export function PowerFlowCanvas({
 
               {/* Wire 4: Havells Inverter (480, 250) -> Monitoring Hub (300, 380) */}
               <line x1="480" y1="250" x2="300" y2="380" className="iso-conduit-bg" />
-              <line
-                x1="480" y1="250" x2="300" y2="380"
-                className="iso-conduit-flow flow-rose"
-                style={{ animationDuration: '2.5s' }}
-              />
+              {(activePower > 0 || liveData?.is_hardware_online) && (
+                <line
+                  x1="480" y1="250" x2="300" y2="380"
+                  className="iso-conduit-flow flow-rose"
+                  style={{ animationDuration: '2.5s' }}
+                />
+              )}
 
               {/* ===== 2. NODE A: SOLAR PV ARRAY (TOP-LEFT: 240, 200) ===== */}
               <g transform="translate(160, 140)">
@@ -349,7 +401,11 @@ export function PowerFlowCanvas({
                   <rect x="0" y="0" width="110" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#F59E0B" strokeWidth="1.5" />
                   <circle cx="18" cy="21" r="10" fill="rgba(245, 158, 11, 0.2)" />
                   <text x="18" y="25" textAnchor="middle" fill="#F59E0B" fontSize="12" fontWeight="bold">☀️</text>
-                  <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">{(activePower / 1000).toFixed(2)} kW</text>
+                  <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">
+                    {activePower !== null && activePower > 0
+                      ? `${(activePower / 1000).toFixed(2)} kW`
+                      : (activePower === 0 ? '0.00 kW' : '— kW')}
+                  </text>
                   <text x="35" y="32" fill="#94A3B8" fontSize="10" fontWeight="600">Solar Yield</text>
                 </g>
               </g>
@@ -380,7 +436,9 @@ export function PowerFlowCanvas({
                   <circle cx="20" cy="21" r="10" fill="rgba(56, 189, 248, 0.2)" />
                   <text x="20" y="25" textAnchor="middle" fill="#38BDF8" fontSize="11" fontWeight="bold">⚡</text>
                   <text x="38" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">Havells GTi</text>
-                  <text x="38" y="32" fill="#10B981" fontSize="10" fontWeight="600">3.3 kW • Online</text>
+                  <text x="38" y="32" fill={activePower > 0 || liveData?.is_hardware_online ? '#10B981' : '#94A3B8'} fontSize="10" fontWeight="600">
+                    {activePower > 0 || liveData?.is_hardware_online ? '3.3 kW • Online' : 'Standby / Sleep'}
+                  </text>
                 </g>
               </g>
 
@@ -409,7 +467,7 @@ export function PowerFlowCanvas({
                 </g>
 
                 {/* Floating Telemetry Badge (Shows Export if generating surplus, Import if drawing grid power at night) */}
-                {gridExport > 0 ? (
+                {gridExport !== null && gridExport > 0 ? (
                   <g transform="translate(20, -28)">
                     <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#10B981" strokeWidth="1.6" />
                     <circle cx="18" cy="21" r="10" fill="rgba(16, 185, 129, 0.2)" />
@@ -417,7 +475,7 @@ export function PowerFlowCanvas({
                     <text x="35" y="18" fill="#10B981" fontSize="13" fontWeight="800">{(gridExport / 1000).toFixed(2)} kW</text>
                     <text x="35" y="32" fill="#94A3B8" fontSize="10" fontWeight="600">APDCL Export</text>
                   </g>
-                ) : gridImport > 0 ? (
+                ) : gridImport !== null && gridImport > 0 ? (
                   <g transform="translate(20, -28)">
                     <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#F59E0B" strokeWidth="1.6" />
                     <circle cx="18" cy="21" r="10" fill="rgba(245, 158, 11, 0.2)" />
@@ -430,8 +488,12 @@ export function PowerFlowCanvas({
                     <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.94)" stroke="#475569" strokeWidth="1.5" />
                     <circle cx="18" cy="21" r="10" fill="rgba(71, 85, 105, 0.2)" />
                     <text x="18" y="25" textAnchor="middle" fill="#94A3B8" fontSize="12" fontWeight="bold">🗼</text>
-                    <text x="35" y="18" fill="#94A3B8" fontSize="13" fontWeight="800">0.00 kW</text>
-                    <text x="35" y="32" fill="#64748B" fontSize="10" fontWeight="600">APDCL Grid</text>
+                    <text x="35" y="18" fill="#94A3B8" fontSize="13" fontWeight="800">
+                      {liveData?.grid_voltage !== null && liveData?.grid_voltage !== undefined
+                        ? `${Number(liveData.grid_voltage).toFixed(0)} V`
+                        : '— V'}
+                    </text>
+                    <text x="35" y="32" fill="#64748B" fontSize="10" fontWeight="600">{hasCtMeter ? "APDCL Grid" : "AC Grid Feeder"}</text>
                   </g>
                 )}
               </g>
@@ -460,9 +522,11 @@ export function PowerFlowCanvas({
                   <rect x="0" y="0" width="112" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#38BDF8" strokeWidth="1.5" />
                   <circle cx="18" cy="21" r="10" fill="rgba(56, 189, 248, 0.2)" />
                   <text x="18" y="25" textAnchor="middle" fill="#38BDF8" fontSize="12" fontWeight="bold">🏠</text>
-                  <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">{(homeLoad / 1000).toFixed(2)} kW</text>
-                  <text x="35" y="32" fill={gridImport > 0 ? "#FDE047" : "#94A3B8"} fontSize="10" fontWeight="600">
-                    {gridImport > 0 ? "Grid Draw" : "Home Load"}
+                  <text x="35" y="18" fill="#F8FAFC" fontSize="13" fontWeight="800">
+                    {homeLoad !== null ? `${(homeLoad / 1000).toFixed(2)} kW` : '— kW'}
+                  </text>
+                  <text x="35" y="32" fill={homeLoad !== null ? (gridImport > 0 ? "#FDE047" : "#94A3B8") : "#64748B"} fontSize="10" fontWeight="600">
+                    {homeLoad !== null ? (gridImport > 0 ? "Grid Draw" : "Home Load") : "Unmetered"}
                   </text>
                 </g>
               </g>
@@ -488,7 +552,9 @@ export function PowerFlowCanvas({
                   <rect x="0" y="0" width="120" height="42" rx="10" fill="rgba(15, 23, 42, 0.92)" stroke="#A855F7" strokeWidth="1.5" />
                   <circle cx="18" cy="21" r="10" fill="rgba(168, 85, 247, 0.2)" />
                   <text x="18" y="25" textAnchor="middle" fill="#A855F7" fontSize="12" fontWeight="bold">📶</text>
-                  <text x="35" y="18" fill="#F8FAFC" fontSize="12" fontWeight="800">192.168.1.5</text>
+                  <text x="35" y="18" fill="#F8FAFC" fontSize="11" fontWeight="800">
+                    {config?.wifi_stick_ip || config?.serial_port || 'RS485 Bus'}
+                  </text>
                   <text x="35" y="32" fill="#22C55E" fontSize="10" fontWeight="600">Datalogger Sync</text>
                 </g>
               </g>
@@ -544,7 +610,7 @@ export function PowerFlowCanvas({
                 <circle cx="0" cy="0" r="36" fill="rgba(56, 189, 248, 0.15)" />
                 <text x="0" y="7" textAnchor="middle" fontSize="26">🏠</text>
                 <text x="0" y="62" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="800">
-                  {(homeLoad / 1000).toFixed(1)} kW Home
+                  {homeLoad !== null ? `${(homeLoad / 1000).toFixed(1)} kW Home` : 'Unmetered Load'}
                 </text>
               </g>
 
@@ -554,7 +620,9 @@ export function PowerFlowCanvas({
                 <circle cx="0" cy="0" r="30" fill="rgba(245, 158, 11, 0.15)" />
                 <text x="0" y="7" textAnchor="middle" fontSize="22">☀️</text>
                 <text x="0" y="54" textAnchor="middle" fill="#F59E0B" fontSize="13" fontWeight="800">
-                  {(activePower / 1000).toFixed(1)} kW Solar
+                  {activePower !== null && activePower > 0
+                    ? `${(activePower / 1000).toFixed(2)} kW Solar`
+                    : '— Standby'}
                 </text>
               </g>
 
@@ -564,7 +632,11 @@ export function PowerFlowCanvas({
                 <circle cx="0" cy="0" r="30" fill={gridExport > 0 ? "rgba(16, 185, 129, 0.15)" : (gridImport > 0 ? "rgba(245, 158, 11, 0.15)" : "rgba(71, 85, 105, 0.15)")} />
                 <text x="0" y="7" textAnchor="middle" fontSize="22">🗼</text>
                 <text x="0" y="54" textAnchor="middle" fill={gridExport > 0 ? "#10B981" : (gridImport > 0 ? "#F59E0B" : "#94A3B8")} fontSize="13" fontWeight="800">
-                  {gridExport > 0 ? `${(gridExport / 1000).toFixed(1)} kW Export` : (gridImport > 0 ? `${(gridImport / 1000).toFixed(1)} kW Import` : '0.0 kW Grid')}
+                  {gridExport > 0
+                    ? `${(gridExport / 1000).toFixed(1)} kW Export`
+                    : (gridImport > 0
+                      ? `${(gridImport / 1000).toFixed(1)} kW Import`
+                      : (liveData?.grid_voltage ? `${Number(liveData.grid_voltage).toFixed(0)} V Grid` : 'Grid Standby'))}
                 </text>
               </g>
 
@@ -610,36 +682,36 @@ export function PowerFlowCanvas({
             <div className="meas-row">
               <span className="meas-label">AC Active Power (Pac)</span>
               <span className={`meas-val font-mono ${activePower > 0 ? 'text-amber font-bold' : 'text-muted'}`}>
-                {activePower.toLocaleString()} W ({(activePower / 1000).toFixed(2)} kW)
+                {activePower !== null ? `${activePower.toLocaleString()} W (${(activePower / 1000).toFixed(2)} kW)` : '— (Inverter Asleep)'}
               </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Reactive Power (Q)</span>
-              <span className="meas-val font-mono text-cyan">{(Number(liveData?.reactive_power) || 0.02).toFixed(2)} kVAR</span>
+              <span className="meas-val font-mono text-cyan">{fmt(liveData?.reactive_power, 2, 'kVAR')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Apparent Power (S)</span>
-              <span className="meas-val font-mono">{(Number(liveData?.apparent_power) || (activePower > 0 ? activePower * 1.002 : 0)).toFixed(0)} VA</span>
+              <span className="meas-val font-mono">{fmt(liveData?.apparent_power, 0, 'VA')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Power Factor (cos φ)</span>
-              <span className="meas-val font-mono text-emerald">{(Number(liveData?.power_factor) || 0.999).toFixed(3)} (Unity)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.power_factor, 3)}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">AC Line Voltage (Phase 1)</span>
-              <span className="meas-val font-mono">{liveData?.grid_voltage || 232.4} V</span>
+              <span className="meas-val font-mono">{fmt(liveData?.grid_voltage, 1, 'V')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">AC Grid Current</span>
-              <span className="meas-val font-mono">{liveData?.grid_current || (activePower > 0 ? (activePower / 232).toFixed(2) : 0.0)} A</span>
+              <span className="meas-val font-mono">{fmt(liveData?.grid_current, 2, 'A')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Grid Frequency</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.grid_frequency || 50.0} Hz (Synchronized)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.grid_frequency, 2, 'Hz')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">DC Current Injection (DCI)</span>
-              <span className="meas-val font-mono">{liveData?.dci_injection || 3.5} mA (Standard &lt;20mA)</span>
+              <span className="meas-val font-mono">{fmt(liveData?.dci_injection, 1, 'mA')}</span>
             </div>
           </div>
         </div>
@@ -657,37 +729,37 @@ export function PowerFlowCanvas({
           <div className="measurements-list">
             <div className="meas-row">
               <span className="meas-label">PV1 String Voltage & Current</span>
-              <span className="meas-val font-mono text-amber">{liveData?.pv1_voltage || 285.0} V • {liveData?.pv1_current || 0.0} A</span>
+              <span className="meas-val font-mono text-amber">{fmt(liveData?.pv1_voltage, 1, 'V')} • {fmt(liveData?.pv1_current, 2, 'A')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV1 String Power</span>
-              <span className="meas-val font-mono font-bold">{(liveData?.pv1_power || 0).toFixed(0)} W</span>
+              <span className="meas-val font-mono font-bold">{fmt(liveData?.pv1_power, 0, 'W')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV2 String Voltage & Current</span>
-              <span className="meas-val font-mono text-amber">{liveData?.pv2_voltage || 280.0} V • {liveData?.pv2_current || 0.0} A</span>
+              <span className="meas-val font-mono text-amber">{fmt(liveData?.pv2_voltage, 1, 'V')} • {fmt(liveData?.pv2_current, 2, 'A')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV2 String Power</span>
-              <span className="meas-val font-mono font-bold">{(liveData?.pv2_power || 0).toFixed(0)} W</span>
+              <span className="meas-val font-mono font-bold">{fmt(liveData?.pv2_power, 0, 'W')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Total DC Solar Input</span>
               <span className="meas-val font-mono text-emerald font-bold">
-                {(Number(liveData?.total_dc_power) || ((liveData?.pv1_power || 0) + (liveData?.pv2_power || 0))).toFixed(0)} W
+                {fmt(liveData?.total_dc_power, 0, 'W')}
               </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Internal DC Bus Link (Vbus)</span>
-              <span className="meas-val font-mono">{liveData?.bus_voltage || 380} V</span>
+              <span className="meas-val font-mono">{fmt(liveData?.bus_voltage, 0, 'V')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">MPPT Tracking Mode</span>
-              <span className="meas-val font-mono text-cyan">{activePower > 0 ? 'Dynamic Dual MPPT Active' : 'Standby Mode (Night)'}</span>
+              <span className="meas-val font-mono text-cyan">{activePower && activePower > 0 ? 'Dynamic Dual MPPT Active' : 'Standby Mode (Night)'}</span>
             </div>
             <div className="meas-row">
-              <span className="meas-label">Solar Zenith Elevation</span>
-              <span className="meas-val font-mono text-muted">{activePower > 0 ? 'Daylight Generation Curve' : 'Below Horizon (0.0 W)'}</span>
+              <span className="meas-label">Solar Generation Status</span>
+              <span className="meas-val font-mono text-muted">{activePower && activePower > 0 ? 'Generating' : 'Standby / 0 V DC'}</span>
             </div>
           </div>
         </div>
@@ -705,19 +777,19 @@ export function PowerFlowCanvas({
           <div className="measurements-list">
             <div className="meas-row">
               <span className="meas-label">PV1 Insulation (P to GND)</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.pv1_insulation || 2840} kΩ (Safe &gt;500kΩ)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.pv1_insulation, 0, 'kΩ')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV2 Insulation (P to GND)</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.pv2_insulation || 2790} kΩ (Safe &gt;500kΩ)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.pv2_insulation, 0, 'kΩ')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">PV Negative to Earth (N to GND)</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.pv_n_insulation || 3160} kΩ (Isolated)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.pv_n_insulation, 0, 'kΩ')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">GFCI Residual Leakage (IΔn)</span>
-              <span className="meas-val font-mono text-cyan">{liveData?.gfci_leakage || 8.4} mA (Trip: 300mA)</span>
+              <span className="meas-val font-mono text-cyan">{fmt(liveData?.gfci_leakage, 1, 'mA')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Anti-Islanding Trip Status</span>
@@ -733,7 +805,7 @@ export function PowerFlowCanvas({
             </div>
             <div className="meas-row">
               <span className="meas-label">Inverter Relay Contactors</span>
-              <span className="meas-val font-mono text-cyan">{activePower > 0 ? 'Closed (Grid Tied)' : 'Open (Standby)'}</span>
+              <span className="meas-val font-mono text-cyan">{activePower && activePower > 0 ? 'Closed (Grid Tied)' : 'Open (Standby)'}</span>
             </div>
           </div>
         </div>
@@ -751,26 +823,26 @@ export function PowerFlowCanvas({
           <div className="measurements-list">
             <div className="meas-row">
               <span className="meas-label">IGBT Module Temperature</span>
-              <span className="meas-val font-mono text-emerald">{liveData?.module_temp || 29} °C (Safe &lt;85°C)</span>
+              <span className="meas-val font-mono text-emerald">{fmt(liveData?.module_temp, 1, '°C')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Internal Enclosure Ambient</span>
-              <span className="meas-val font-mono text-cyan">{liveData?.inner_temp || 28} °C</span>
+              <span className="meas-val font-mono text-cyan">{fmt(liveData?.inner_temp, 1, '°C')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Instantaneous Efficiency (η)</span>
               <span className="meas-val font-mono text-emerald font-bold">
-                {activePower > 0 ? `${(liveData?.inverter_efficiency || 97.6).toFixed(1)}%` : 'Standby (97.6% Peak)'}
+                {activePower && activePower > 0 ? `${fmt(liveData?.inverter_efficiency, 1)}%` : 'Standby'}
               </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Today's Generation Runtime</span>
-              <span className="meas-val font-mono font-bold">{(liveData?.today_runtime_hrs || 5.8).toFixed(1)} Hours</span>
+              <span className="meas-val font-mono font-bold">{fmt(liveData?.today_runtime_hrs, 1, 'Hours')}</span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Cumulative Lifetime Runtime</span>
               <span className="meas-val font-mono text-amber font-bold">
-                {Math.round(liveData?.total_runtime_hrs || 3418).toLocaleString()} Hours
+                {fmt(liveData?.total_runtime_hrs, 0, 'Hours')}
               </span>
             </div>
             <div className="meas-row">
@@ -779,11 +851,13 @@ export function PowerFlowCanvas({
             </div>
             <div className="meas-row">
               <span className="meas-label">Datalogger Hardware & IP</span>
-              <span className="meas-val font-mono">SRBAN7JD3S • 192.168.1.5</span>
+              <span className="meas-val font-mono">
+                {config?.wifi_stick_sn || 'SRBAN7JD3S'} • {config?.wifi_stick_ip || config?.serial_port || 'RS485 Direct'}
+              </span>
             </div>
             <div className="meas-row">
               <span className="meas-label">Modbus RTU Telemetry Bus</span>
-              <span className="meas-val font-mono text-cyan">{liveData?.source || 'Simulator'}</span>
+              <span className="meas-val font-mono text-cyan">{liveData?.source || 'Offline'}</span>
             </div>
           </div>
         </div>

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ArrowUpRight } from 'lucide-react';
+import { ChevronDown, ArrowUpRight, Zap, Sun } from 'lucide-react';
 
-export function SolarPanelCard({ liveData, config, summary }) {
+export function SolarPanelCard({ liveData = {}, config = {}, summary = {} }) {
   const [selectedString, setSelectedString] = useState('all');
 
-  const activePower = Math.round(liveData.active_power || 0);
-  const pv1Power = Math.round(liveData.pv1_power || 0);
-  const pv2Power = Math.round(liveData.pv2_power || 0);
+  const activePower = liveData.active_power !== null && liveData.active_power !== undefined ? Math.round(liveData.active_power) : null;
+  const pv1Power = liveData.pv1_power !== null && liveData.pv1_power !== undefined ? Math.round(liveData.pv1_power) : null;
+  const pv2Power = liveData.pv2_power !== null && liveData.pv2_power !== undefined ? Math.round(liveData.pv2_power) : null;
 
   let displayPower = activePower;
   let labelString = 'Total Generation';
@@ -18,14 +18,22 @@ export function SolarPanelCard({ liveData, config, summary }) {
     labelString = 'String 2 (PV2)';
   }
 
+  const hasCt = config?.has_ct_meter === true || config?.has_ct_meter === 'true' || liveData?.has_ct_meter === true;
+  const ratedCapacityW = Number(config?.rated_capacity_w) || 3300;
+  const isGenerating = activePower !== null && activePower > 0;
+
   return (
     <div className="solary-card card-hero-panel">
       {/* Card Header */}
       <div className="card-header-row">
-        <h3 className="card-heading">Solar Panel Monitoring</h3>
+        <div>
+          <h3 className="card-heading">Solar Array & Inverter Generation</h3>
+          <span className="card-sub-timestamp font-mono" style={{ fontSize: '11px' }}>
+            {isGenerating ? 'Active 1 Hz Inverter Telemetry' : 'Inverter Standby (Night / Standby)'}
+          </span>
+        </div>
         <div className="location-pill">
-          <span>Solar Rooftop</span>
-          <ChevronDown size={14} />
+          <span>Havells 3.3 kW Rooftop</span>
         </div>
       </div>
 
@@ -35,39 +43,83 @@ export function SolarPanelCard({ liveData, config, summary }) {
           {/* Top Row Stats */}
           <div className="stats-metric-trio">
             <div className="stat-col">
-              <span className="stat-label">Status</span>
-              <span className="stat-val text-emerald font-bold">Active</span>
+              <span className="stat-label">Inverter State</span>
+              <span className={`stat-val font-bold ${isGenerating ? 'text-emerald' : 'text-muted'}`}>
+                {isGenerating ? 'Generating' : 'Standby'}
+              </span>
             </div>
             <div className="stat-col">
-              <span className="stat-label">Capacity</span>
-              <span className="stat-val font-semibold">3.3 <small>kW</small></span>
+              <span className="stat-label">Array Rating</span>
+              <span className="stat-val font-semibold font-mono">
+                {(ratedCapacityW / 1000).toFixed(1)} <small>kW</small>
+              </span>
             </div>
             <div className="stat-col">
-              <span className="stat-label">Total Yield</span>
-              <span className="stat-val font-semibold">{Math.round(summary.lifetime_kwh || 4835).toLocaleString()} <small>kWh</small></span>
+              <span className="stat-label">Lifetime Yield</span>
+              <span className="stat-val font-semibold font-mono">
+                {summary.lifetime_kwh !== null && summary.lifetime_kwh !== undefined
+                  ? `${Math.round(summary.lifetime_kwh).toLocaleString()} `
+                  : '— '}
+                <small>kWh</small>
+              </span>
             </div>
           </div>
 
           {/* Middle Row Stats */}
           <div className="stats-metric-duo">
             <div className="stat-col">
-              <span className="stat-label">Home Consumption</span>
-              <span className="stat-val font-bold">{Math.round(liveData?.home_load || 680)} <small>W</small></span>
+              {hasCt ? (
+                <>
+                  <span className="stat-label">Home Consumption</span>
+                  <span className="stat-val font-bold font-mono">
+                    {liveData?.home_load !== null && liveData?.home_load !== undefined ? (
+                      <>{Math.round(liveData.home_load)} <small>W</small></>
+                    ) : (
+                      '— W'
+                    )}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="stat-label">AC Grid Voltage (PCC)</span>
+                  <span className="stat-val font-bold font-mono">
+                    {liveData?.grid_voltage !== null && liveData?.grid_voltage !== undefined ? (
+                      <>{Number(liveData.grid_voltage).toFixed(1)} <small>V AC</small></>
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>— V (Standby)</span>
+                    )}
+                  </span>
+                </>
+              )}
             </div>
             <div className="stat-col">
               <span className="stat-label">Today's Generation</span>
-              <span className="stat-val font-bold">{(liveData.today_energy || 0).toFixed(2)} <small>kWh</small></span>
+              <span className="stat-val font-bold font-mono text-emerald">
+                {liveData.today_energy !== null && liveData.today_energy !== undefined ? (
+                  <>{Number(liveData.today_energy).toFixed(2)} <small>kWh</small></>
+                ) : summary?.today_kwh !== null && summary?.today_kwh !== undefined ? (
+                  <>{Number(summary.today_kwh).toFixed(2)} <small>kWh</small></>
+                ) : (
+                  <>— <small>kWh</small></>
+                )}
+              </span>
             </div>
           </div>
 
           {/* Bottom Real Time Power Big Readout */}
           <div className="stat-realtime-block">
-            <span className="stat-label">Real Time Power ({labelString})</span>
+            <span className="stat-label">Real-Time AC Output ({labelString})</span>
             <div className="realtime-val-wrapper">
-              <span className="realtime-big-num">{displayPower.toLocaleString()}</span>
+              <span className="realtime-big-num font-mono">
+                {displayPower !== null && displayPower !== undefined ? displayPower.toLocaleString() : '—'}
+              </span>
               <span className="realtime-unit">W</span>
-              <span className="trend-badge">
-                <ArrowUpRight size={13} /> +18.4%
+              <span className={`trend-badge ${isGenerating ? 'generating' : 'standby'}`}>
+                {isGenerating ? (
+                  <><ArrowUpRight size={13} /> Generating</>
+                ) : (
+                  'Standby (0 W)'
+                )}
               </span>
             </div>
           </div>
@@ -82,8 +134,8 @@ export function SolarPanelCard({ liveData, config, summary }) {
               className="panel-select-native"
             >
               <option value="all">All Arrays (PV1 + PV2)</option>
-              <option value="pv1">PV String 1 (1620 W)</option>
-              <option value="pv2">PV String 2 (1500 W)</option>
+              <option value="pv1">PV String 1 (PV1)</option>
+              <option value="pv2">PV String 2 (PV2)</option>
             </select>
             <ChevronDown size={13} className="select-arrow" />
           </div>
@@ -128,7 +180,6 @@ export function SolarPanelCard({ liveData, config, summary }) {
               <polygon points="46,148 160,89 279,126 165,189" fill="url(#panelGlass)" />
 
               {/* Monocrystalline Grid Wires (Isometric Lines) */}
-              {/* Longitudinal busbars */}
               <line x1="75" y1="133" x2="190" y2="99" stroke="#38BDF8" strokeWidth="1" opacity="0.6" />
               <line x1="105" y1="149" x2="220" y2="114" stroke="#38BDF8" strokeWidth="1" opacity="0.6" />
               <line x1="135" y1="165" x2="250" y2="129" stroke="#38BDF8" strokeWidth="1" opacity="0.6" />
@@ -145,7 +196,7 @@ export function SolarPanelCard({ liveData, config, summary }) {
           </div>
 
           <div className="panel-count-label">
-            <span className="count-title">Total Array</span>
+            <span className="count-title">Dual String Array</span>
             <span className="count-num">8 Monocrystalline Panels</span>
           </div>
         </div>

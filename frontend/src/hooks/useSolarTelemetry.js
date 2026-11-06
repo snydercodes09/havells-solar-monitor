@@ -2,25 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useSolarTelemetry() {
   const [liveData, setLiveData] = useState({
-    active_power: 0.0,
-    pv1_voltage: 0.0,
-    pv1_current: 0.0,
-    pv1_power: 0.0,
-    pv2_voltage: 0.0,
-    pv2_current: 0.0,
-    pv2_power: 0.0,
-    grid_voltage: 0.0,
-    grid_current: 0.0,
-    grid_frequency: 0.0,
-    today_energy: 0.0,
-    total_energy: 0.0,
-    module_temp: 0.0,
-    inner_temp: 0.0,
-    bus_voltage: 0.0,
+    active_power: null,
+    pv1_voltage: null,
+    pv1_current: null,
+    pv1_power: null,
+    pv2_voltage: null,
+    pv2_current: null,
+    pv2_power: null,
+    grid_voltage: null,
+    grid_current: null,
+    grid_frequency: null,
+    today_energy: null,
+    total_energy: null,
+    module_temp: null,
+    inner_temp: null,
+    bus_voltage: null,
+    home_load: null,
+    grid_import: null,
+    grid_export: null,
     status: 'Connecting...',
     source: 'Connecting...',
+    is_hardware_online: false,
+    has_ct_meter: false,
     is_simulation: false,
-    is_load_estimated: true
+    is_load_estimated: false
   });
 
   const [connStatus, setConnStatus] = useState('connecting'); // 'live_ws' | 'polling_fallback' | 'reconnecting'
@@ -28,13 +33,14 @@ export function useSolarTelemetry() {
   const [dailyHistory, setDailyHistory] = useState([]);
   const [monthlyHistory, setMonthlyHistory] = useState([]);
   const [summary, setSummary] = useState({
-    lifetime_kwh: 0.0,
-    lifetime_earnings: 0.0,
-    month_kwh: 0.0,
-    month_earnings: 0.0,
-    today_kwh: 0.0,
-    lifetime_co2_kg: 0.0,
-    trees_equivalent: 0.0
+    lifetime_kwh: null,
+    lifetime_earnings: null,
+    month_kwh: null,
+    month_earnings: null,
+    today_kwh: null,
+    lifetime_co2_kg: null,
+    trees_equivalent: null,
+    has_ct_meter: false
   });
   const [config, setConfig] = useState({
     tariff_rate: 7.65,
@@ -44,19 +50,35 @@ export function useSolarTelemetry() {
     inverter_model: 'Havells Enviro Pro GTi',
     inverter_sn: 'AFDOALB2PNAPJ78',
     rated_capacity_w: 3300,
-    simulation_mode: true,
+    simulation_mode: false,
     selected_com_port: '',
     modbus_port: '',
     baud_rate: 9600,
-    slave_id: 1
+    slave_id: 1,
+    has_ct_meter: false,
+    meter_model: 'None',
+    meter_slave_id: 2
   });
   const [availablePorts, setAvailablePorts] = useState([]);
   const [historyLogs, setHistoryLogs] = useState([]);
+  const [meterReadings, setMeterReadings] = useState([]);
+  const [meterSyncSummary, setMeterSyncSummary] = useState(null);
+  const [tariffConfig, setTariffConfig] = useState(null);
+  const [billingReconciliation, setBillingReconciliation] = useState(null);
 
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const pollingIntervalRef = useRef(null);
   const lastMessageTimeRef = useRef(Date.now());
+
+  const normalizeConfig = (raw) => {
+    if (!raw) return {};
+    return {
+      ...raw,
+      has_ct_meter: raw.has_ct_meter === true || raw.has_ct_meter === 'true',
+      simulation_mode: raw.simulation_mode === true || raw.simulation_mode === 'true'
+    };
+  };
 
   // 1. Fetch REST Data
   const fetchConfig = useCallback(async () => {
@@ -64,8 +86,36 @@ export function useSolarTelemetry() {
       const res = await fetch('/api/config');
       if (res.ok) {
         const data = await res.json();
-        setConfig(data);
+        setConfig(normalizeConfig(data));
       }
+    } catch (e) {
+      // Silently retry later
+    }
+  }, []);
+
+  const fetchMeterReadings = useCallback(async () => {
+    try {
+      const [readingsRes, syncRes, billingRes] = await Promise.all([
+        fetch('/api/meter/readings'),
+        fetch('/api/meter/sync-summary'),
+        fetch('/api/billing/reconciliation')
+      ]);
+      if (readingsRes.ok) setMeterReadings(await readingsRes.json());
+      if (syncRes.ok) setMeterSyncSummary(await syncRes.json());
+      if (billingRes.ok) setBillingReconciliation(await billingRes.json());
+    } catch (e) {
+      // Silently retry later
+    }
+  }, []);
+
+  const fetchBillingData = useCallback(async () => {
+    try {
+      const [tRes, bRes] = await Promise.all([
+        fetch('/api/billing/tariff-config'),
+        fetch('/api/billing/reconciliation')
+      ]);
+      if (tRes.ok) setTariffConfig(await tRes.json());
+      if (bRes.ok) setBillingReconciliation(await bRes.json());
     } catch (e) {
       // Silently retry later
     }
@@ -129,10 +179,13 @@ export function useSolarTelemetry() {
       if (res.ok) {
         const data = await res.json();
         setLiveData(data);
+        setConnStatus('polling_fallback');
         lastMessageTimeRef.current = Date.now();
+      } else {
+        setConnStatus('reconnecting');
       }
     } catch (e) {
-      // Network hiccup, will retry
+      setConnStatus('reconnecting');
     }
   }, []);
 
@@ -203,6 +256,8 @@ export function useSolarTelemetry() {
     fetchHistory();
     fetchPorts();
     fetchHistoryLogs();
+    fetchMeterReadings();
+    fetchBillingData();
     connectWebSocket();
 
     // Health-check: If no WS message received for > 3.5s, trigger polling fallback automatically
@@ -219,6 +274,8 @@ export function useSolarTelemetry() {
       fetchHistory();
       fetchPorts();
       fetchHistoryLogs();
+      fetchMeterReadings();
+      fetchBillingData();
     }, 45000);
 
     return () => {
@@ -228,7 +285,7 @@ export function useSolarTelemetry() {
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
-  }, [fetchConfig, fetchSummary, fetchHistory, fetchPorts, fetchHistoryLogs, connectWebSocket, startPollingFallback, stopPollingFallback]);
+  }, [fetchConfig, fetchSummary, fetchHistory, fetchPorts, fetchHistoryLogs, fetchMeterReadings, fetchBillingData, connectWebSocket, startPollingFallback, stopPollingFallback]);
 
   const updateConfig = async (newConfig) => {
     try {
@@ -239,7 +296,7 @@ export function useSolarTelemetry() {
       });
       if (res.ok) {
         const data = await res.json();
-        setConfig(data.config);
+        setConfig(normalizeConfig(data.config));
         fetchSummary();
         fetchHistory();
         return { success: true };
@@ -247,6 +304,75 @@ export function useSolarTelemetry() {
       return { success: false, error: 'Server returned error status' };
     } catch (e) {
       console.error('[Config Update Error]', e);
+      return { success: false, error: e.message };
+    }
+  };
+
+  const updateTariffConfig = async (newCfg) => {
+    try {
+      const res = await fetch('/api/billing/tariff-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCfg)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchBillingData();
+        return { success: true, tariff_config: data.tariff_config };
+      }
+      return { success: false, error: data.detail || 'Failed to update tariff config' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const calculateCustomBill = async (params) => {
+    try {
+      const res = await fetch('/api/billing/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const addMeterReading = async (readingData) => {
+    try {
+      const res = await fetch('/api/meter/readings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(readingData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchMeterReadings();
+        await fetchBillingData();
+        return { success: true, reading: data.reading };
+      }
+      return { success: false, error: data.detail || data.message || 'Failed to save meter reading' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
+  const deleteMeterReading = async (id) => {
+    try {
+      const res = await fetch(`/api/meter/readings/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        await fetchMeterReadings();
+        await fetchBillingData();
+        return { success: true };
+      }
+      return { success: false, error: 'Failed to delete reading' };
+    } catch (e) {
       return { success: false, error: e.message };
     }
   };
@@ -264,6 +390,16 @@ export function useSolarTelemetry() {
     saveConfig: updateConfig,
     historyLogs,
     isDbConnected: connStatus !== 'reconnecting',
-    refreshHistory: fetchHistory
+    refreshHistory: fetchHistory,
+    meterReadings,
+    meterSyncSummary,
+    fetchMeterReadings,
+    addMeterReading,
+    deleteMeterReading,
+    tariffConfig,
+    billingReconciliation,
+    fetchBillingData,
+    updateTariffConfig,
+    calculateCustomBill
   };
 }

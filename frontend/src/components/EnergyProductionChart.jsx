@@ -12,12 +12,15 @@ const MemoizedAreaChart = React.memo(function MemoizedAreaChart({ options, serie
   );
 });
 
-export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], liveData = {} }) {
+export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], liveData = {}, config = {} }) {
   const [viewMode, setViewMode] = useState('today'); // 'today' | 'daily'
 
-  const activePower = Math.round(Number(liveData?.active_power) || 3120);
+  const activePower = liveData?.active_power !== null && liveData?.active_power !== undefined
+    ? Math.round(Number(liveData.active_power))
+    : null;
+  const hasCt = config?.has_ct_meter === true || config?.has_ct_meter === 'true' || liveData?.has_ct_meter === true;
 
-  // Memoize categories and series data
+  // Memoize categories and series data - only genuine measured values
   const { categories, producedData, consumedData } = useMemo(() => {
     let cats = [];
     let prod = [];
@@ -26,16 +29,20 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
     if (viewMode === 'today') {
       cats = todayCurve.map(d => d.time_slot);
       prod = todayCurve.map(d => Number(d.avg_power) || 0);
-      cons = todayCurve.map(d => Math.min(Number(d.avg_power) || 0, 650 + Math.round(Math.sin((Number(d.avg_power) || 0) / 100) * 80)));
+      if (hasCt) {
+        cons = todayCurve.map(d => Number(d.avg_load) || 0);
+      }
     } else {
       const slice = dailyHistory.slice(-14);
       cats = slice.map(d => d.date.slice(5)); // MM-DD
       prod = slice.map(d => Math.round((Number(d.energy_kwh) || 0) * 10) / 10);
-      cons = slice.map(d => Math.round(((Number(d.energy_kwh) || 0) * 0.42 + 4.5) * 10) / 10);
+      if (hasCt) {
+        cons = slice.map(d => Math.round((Number(d.consumed_kwh) || 0) * 10) / 10);
+      }
     }
 
     return { categories: cats, producedData: prod, consumedData: cons };
-  }, [viewMode, todayCurve, dailyHistory]);
+  }, [viewMode, todayCurve, dailyHistory, hasCt]);
 
   // Memoize chart options so the object reference remains strictly stable
   const chartOptions = useMemo(() => ({
@@ -52,7 +59,7 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
       redrawOnWindowResize: false,
       redrawOnParentResize: false
     },
-    colors: ['#FF7A00', '#2563EB'], // Orange and Electric Blue matching Image 1!
+    colors: ['#FF7A00', '#2563EB'], // Orange and Electric Blue
     stroke: {
       curve: 'smooth',
       width: [3, 2.5]
@@ -91,13 +98,23 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
         formatter: (val) => val ? (viewMode === 'today' ? `${Math.round(val)} W` : `${val} kWh`) : '0'
       }
     },
-    legend: { show: false } // Custom legend below matching Image 1
+    legend: { show: false }
   }), [categories, viewMode]);
 
-  const series = useMemo(() => [
-    { name: 'Energy Produced', data: producedData },
-    { name: 'Energy Consumption', data: consumedData }
-  ], [producedData, consumedData]);
+  const series = useMemo(() => {
+    const list = [
+      { name: viewMode === 'today' ? 'Solar Generation (W)' : 'Daily Solar Yield (kWh)', data: producedData }
+    ];
+    if (hasCt && consumedData.length > 0) {
+      list.push({
+        name: 'Household Consumption',
+        data: consumedData
+      });
+    }
+    return list;
+  }, [producedData, consumedData, viewMode, hasCt]);
+
+  const showConsumptionLegend = hasCt && consumedData.length > 0;
 
   return (
     <div className="solary-card card-energy-produced">
@@ -105,13 +122,17 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
       <div className="card-header-row">
         <div>
           <div className="flex-align gap-8">
-            <h3 className="card-heading">Energy Produced</h3>
+            <h3 className="card-heading">Energy Production Curve</h3>
             <span className="badge-energy-rate" style={{ fontSize: '12px' }}>
               <Zap size={13} className="text-amber" />
-              <span>{activePower} W Live</span>
+              <span>{activePower !== null && activePower > 0 ? `${activePower} W Live` : 'Standby'}</span>
             </span>
           </div>
-          <span className="card-sub-timestamp">Real-time Solar Generation vs Household Load</span>
+          <span className="card-sub-timestamp">
+            {hasCt
+              ? 'Real-time Solar Generation vs Household Load'
+              : 'Real-time Inverter AC Output (Direct Wi-Fi / Modbus Telemetry)'}
+          </span>
         </div>
 
         {/* View Mode Selector */}
@@ -133,16 +154,22 @@ export function EnergyProductionChart({ todayCurve = [], dailyHistory = [], live
         <MemoizedAreaChart options={chartOptions} series={series} />
       </div>
 
-      {/* Custom Legend Matching Image 1 */}
+      {/* Custom Legend */}
       <div className="chart-custom-legend">
         <div className="legend-item">
           <span className="legend-line line-orange"></span>
-          <span className="legend-text">Energy Produced</span>
+          <span className="legend-text">
+            {viewMode === 'today' ? 'Solar Inverter Generation' : 'Daily Solar Yield'}
+          </span>
         </div>
-        <div className="legend-item">
-          <span className="legend-line line-blue"></span>
-          <span className="legend-text">Energy Consumption</span>
-        </div>
+        {showConsumptionLegend && (
+          <div className="legend-item">
+            <span className="legend-line line-blue"></span>
+            <span className="legend-text">
+              {isSim ? '[SIMULATION] Estimated Load' : 'Household Consumption'}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

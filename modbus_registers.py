@@ -60,3 +60,45 @@ def combine_u32(high: int, low: int, word_swap: bool = False) -> int:
     if word_swap:
         return (((low & 0xFFFF) << 16) | (high & 0xFFFF)) & 0xFFFFFFFF
     return (((high & 0xFFFF) << 16) | (low & 0xFFFF)) & 0xFFFFFFFF
+
+# =====================================================================
+# SunSpec Alliance DER Information Models (IEEE 1547-2018 / Modbus TCP)
+# Active on Havells / SolaX Pocket Wi-Fi stick on Port 502
+# =====================================================================
+
+# Model 1: Common Model (Base 40000)
+SUNSPEC_HEADER_REG = 40000          # 'SunS' (0x5375, 0x6E53)
+SUNSPEC_MODEL_ID = 40002            # 1
+SUNSPEC_MANUFACTURER_OFFSET = 40004 # 16 chars: 'Solax Power'
+SUNSPEC_MODEL_OFFSET = 40020        # 16 chars: 'X1-MlNl-G4'
+SUNSPEC_FIRMWARE_OFFSET = 40044     # 8 chars:  '034'
+
+# Model 701: DER AC Real-Time Measurements (Base 40070, Length 153)
+SUNSPEC_M701_BASE = 40070
+M701_OP_STATE = 40073               # 1 = ON
+M701_INVERTER_STATE = 40074         # 1=Off, 2=Sleeping, 3=Starting/Generating, 4=MPPT, 7=Fault
+M701_GRID_CONN = 40075              # 1 = Connected
+M701_ACTIVE_POWER = 40080           # Active AC Power (W)
+M701_POWER_FACTOR = 40083           # Power Factor (scale 0.01)
+M701_LINE_VOLTAGE = 40086           # Phase A Voltage (scale 0.1 V)
+M701_FREQUENCY = 40088              # Grid Frequency (scale 0.01 Hz)
+M701_MODULE_TEMP = 40107            # Heatsink Temperature (1.0 °C)
+
+# Model 714: DER DC String Inputs (Base 40296, Length 68)
+SUNSPEC_M714_BASE = 40296
+M714_PV1_ID = 40318                 # 'PV1'
+M714_PV1_VOLTAGE = 40327            # PV1 DC Voltage (scale 0.1 V)
+M714_PV1_POWER = 40328              # PV1 DC Power (W)
+M714_PV2_ID = 40338                 # 'PV2'
+M714_PV2_VOLTAGE = 40347            # PV2 DC Voltage (scale 0.1 V)
+M714_PV2_POWER = 40348              # PV2 DC Power (W)
+
+# Model 702: Nameplate Ratings (Base 40225, Length 50)
+SUNSPEC_M702_BASE = 40225
+M702_RATED_W = 40227                # Rated Active Power (3300 W)
+M702_RATED_VA = 40232               # Rated Apparent Power (3300 VA)
+M702_PV1_RATED_W = 40233            # PV1 Max Rating (1650 W)
+M702_PV2_RATED_W = 40234            # PV2 Max Rating (1650 W)
+M702_NOMINAL_V = 40239              # Nominal Voltage (230.0 V)
+M702_MAX_AMPS = 40242               # Max Continuous Amps (15.0 A)
+

@@ -1,20 +1,48 @@
-import React, { useState } from 'react';
-import { Sun, Cloud, CloudRain, Zap } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Sun, Zap } from 'lucide-react';
 
-export function MonthlyGenerationCard({ monthlyHistory, summary, config }) {
-  const [selectedMonth, setSelectedMonth] = useState('Nov');
+export function MonthlyGenerationCard({ monthlyHistory = [], summary = {}, config = {} }) {
+  const tariffRate = Number(config?.tariff_rate) || 7.65;
 
-  const tariffRate = config.tariff_rate || 7.65;
+  // Genuine monthly history records derived from database
+  const months = useMemo(() => {
+    if (Array.isArray(monthlyHistory) && monthlyHistory.length > 0) {
+      return monthlyHistory.map(m => {
+        const parts = String(m.month || '').split('-');
+        let monthName = m.month;
+        if (parts.length === 2) {
+          const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+          monthName = d.toLocaleString('default', { month: 'short' });
+        }
+        const kwh = Number(m.monthly_kwh) || 0;
+        const savings = Number(m.monthly_savings) || Math.round(kwh * tariffRate);
+        return {
+          name: monthName,
+          monthKey: m.month,
+          kwh,
+          savings,
+          days: m.days_recorded || 1
+        };
+      });
+    }
 
-  const months = [
-    { name: 'Aug', kwh: 385, icon: CloudRain, weather: 'Monsoon' },
-    { name: 'Sept', kwh: 412, icon: Cloud, weather: 'Partly Cloudy' },
-    { name: 'Oct', kwh: 468, icon: Sun, weather: 'Clear Sun' },
-    { name: 'Nov', kwh: 148, icon: Sun, weather: 'Sunny Autumn', active: true },
-  ];
+    const curMonthName = new Date().toLocaleString('default', { month: 'short' });
+    const curMonthKey = new Date().toISOString().slice(0, 7);
+    const kwh = summary?.month_kwh !== null && summary?.month_kwh !== undefined ? Number(summary.month_kwh) : 0;
+    const savings = summary?.month_earnings !== null && summary?.month_earnings !== undefined ? Number(summary.month_earnings) : Math.round(kwh * tariffRate);
 
-  const activeData = months.find(m => m.name === selectedMonth) || months[3];
-  const activeSavings = Math.round(activeData.kwh * tariffRate);
+    return [{
+      name: curMonthName,
+      monthKey: curMonthKey,
+      kwh,
+      savings,
+      days: 1
+    }];
+  }, [monthlyHistory, summary, tariffRate]);
+
+  const [selectedMonth, setSelectedMonth] = useState(months[0]?.name || 'Current');
+  const activeData = months.find(m => m.name === selectedMonth) || months[0] || { kwh: 0, savings: 0, days: 0 };
+  const currentMonthKwh = summary?.month_kwh !== null && summary?.month_kwh !== undefined ? summary.month_kwh : (months[0]?.kwh || 0);
 
   return (
     <div className="solary-card card-monthly-gen">
@@ -22,18 +50,17 @@ export function MonthlyGenerationCard({ monthlyHistory, summary, config }) {
       <div className="card-header-row">
         <div>
           <h3 className="card-heading">Monthly Generation</h3>
-          <span className="card-sub-timestamp">Live APDCL Net-Metering</span>
+          <span className="card-sub-timestamp">Verified SQLite History</span>
         </div>
         <div className="badge-energy-rate">
           <Zap size={14} className="text-amber" />
-          <span>{summary.month_kwh || 450} kWh</span>
+          <span>{currentMonthKwh !== null ? `${currentMonthKwh} kWh` : '—'}</span>
         </div>
       </div>
 
       {/* Month Tiles Carousel */}
       <div className="month-tiles-grid">
         {months.map((m) => {
-          const Icon = m.icon;
           const isSelected = selectedMonth === m.name;
           return (
             <div
@@ -43,7 +70,7 @@ export function MonthlyGenerationCard({ monthlyHistory, summary, config }) {
             >
               <span className="month-name">{m.name}</span>
               <div className="month-icon-wrap">
-                <Icon size={22} className={isSelected ? 'text-white' : 'text-muted'} />
+                <Sun size={22} className={isSelected ? 'text-white' : 'text-muted'} />
               </div>
               <span className="month-kwh">{m.kwh} <small>kWh</small></span>
             </div>
@@ -55,16 +82,16 @@ export function MonthlyGenerationCard({ monthlyHistory, summary, config }) {
       <div className="monthly-stats-breakdown">
         <div className="m-stat-row">
           <span className="m-label">Selected Month Yield:</span>
-          <span className="m-val font-semibold">{activeData.kwh} kWh ({activeData.weather})</span>
+          <span className="m-val font-semibold">{activeData.kwh} kWh ({activeData.days} days recorded)</span>
         </div>
         <div className="m-stat-row">
-          <span className="m-label">APDCL Offset Tier:</span>
-          <span className="m-val text-emerald font-semibold">Slab 3 (&gt;240 Units @ ₹{tariffRate})</span>
+          <span className="m-label">Tariff Displacement Rate:</span>
+          <span className="m-val text-emerald font-semibold">₹{tariffRate.toFixed(2)} / kWh</span>
         </div>
         <div className="m-stat-row">
-          <span className="m-label">APDCL Electric Bill Saved:</span>
+          <span className="m-label">Calculated Solar Value:</span>
           <span className="m-val text-cyan font-bold" style={{ fontSize: '15px' }}>
-            ₹ {activeSavings.toLocaleString('en-IN')}
+            ₹ {activeData.savings.toLocaleString('en-IN')}
           </span>
         </div>
       </div>

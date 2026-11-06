@@ -25,6 +25,8 @@ yarn-error.log*
 # SQLite database and temp journal / wal files
 solar_telemetry.db
 *.db
+*.db.*
+*.bak
 *.db-wal
 *.db-shm
 *.db-journal

@@ -48,26 +48,26 @@ export function PersistentHistorySection({
       return {
         totalKwh: Math.round(totalKwh * 10) / 10,
         totalSavings: Math.round(totalSavings),
-        avgDaily: (totalKwh / Math.max(1, monthlyHistory.length * 30)).toFixed(1),
-        maxPeak: maxPeak.toFixed(0),
-        avgSunlight: '5.8',
+        avgDaily: monthlyHistory.length > 0 ? (totalKwh / (monthlyHistory.length * 30)).toFixed(1) : '—',
+        maxPeak: maxPeak > 0 ? maxPeak.toFixed(0) : '—',
+        avgSunlight: '—',
         co2Saved: Math.round(totalKwh * 0.82)
       };
     } else {
       const totalKwh = activeHistorySlice.reduce((acc, d) => acc + (Number(d.energy_kwh) || 0), 0);
       const totalSavings = activeHistorySlice.reduce((acc, d) => acc + (Number(d.earnings_inr) || 0), 0);
-      const maxPeak = Math.max(...activeHistorySlice.map(d => Number(d.peak_power) || 0), 0);
-      const avgSunlight = (
-        activeHistorySlice.reduce((acc, d) => acc + (Number(d.sunlight_hours) || 0), 0) /
-        Math.max(1, activeHistorySlice.length)
-      ).toFixed(1);
+      const maxPeak = activeHistorySlice.length > 0 ? Math.max(...activeHistorySlice.map(d => Number(d.peak_power) || 0), 0) : 0;
+      const validSunlightDays = activeHistorySlice.filter(d => Number(d.sunlight_hours) > 0);
+      const avgSunlight = validSunlightDays.length > 0
+        ? (validSunlightDays.reduce((acc, d) => acc + Number(d.sunlight_hours), 0) / validSunlightDays.length).toFixed(1)
+        : '—';
 
       return {
         totalKwh: Math.round(totalKwh * 10) / 10,
         totalSavings: Math.round(totalSavings),
-        avgDaily: (totalKwh / Math.max(1, activeHistorySlice.length)).toFixed(1),
-        maxPeak: maxPeak > 0 ? maxPeak.toFixed(0) : '3120',
-        avgSunlight: avgSunlight > 0 ? avgSunlight : '5.9',
+        avgDaily: activeHistorySlice.length > 0 ? (totalKwh / activeHistorySlice.length).toFixed(1) : '—',
+        maxPeak: maxPeak > 0 ? maxPeak.toFixed(0) : '—',
+        avgSunlight: avgSunlight,
         co2Saved: Math.round(totalKwh * 0.82)
       };
     }
