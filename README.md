@@ -45,40 +45,75 @@ Engineered for direct local telemetry (via **SunSpec Modbus TCP** over the Havel
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Daily Use
 
-### 1. Requirements
+### 1. Requirements (First Time Only)
 - Python 3.10 or higher
-- Node.js 18+ (only needed if building or developing frontend code)
+- Install backend dependencies once:
+  ```bash
+  pip install -r requirements.txt
+  ```
 
-### 2. Install Backend Dependencies
-```bash
-pip install -r requirements.txt
-```
+---
 
-### 3. Run the Dashboard
-Execute the Windows startup batch script:
+## 🔄 How to Run the App Every Time (Daily Routine)
+
+You **do not** need to install Node.js, run `npm`, or build anything for everyday monitoring. The production React dashboard is pre-compiled into `static_dist/` and served directly by FastAPI.
+
+### Option 1: One-Click Desktop Startup (Easiest)
+Simply double-click the included batch script in the project folder:
 ```cmd
 start_monitor.bat
 ```
-Or start manually with Python:
+This automatically:
+1. Starts the FastAPI server and WebSocket telemetry stream on port `8080`.
+2. Automatically opens your default web browser to **[http://localhost:8080](http://localhost:8080)**.
+
+---
+
+### Option 2: Command Line Startup
+If you prefer running from a terminal (PowerShell, Command Prompt, or VS Code):
 ```bash
+cd havells-solar-monitor
 python main.py
 ```
-Open **[http://localhost:8080](http://localhost:8080)** in your browser.
+Then open **[http://localhost:8080](http://localhost:8080)** in any browser.
 
-### 4. (Optional) Frontend Development
-To edit React components with Vite Hot-Module Replacement (HMR):
+---
+
+### Option 3: Auto-Start with Windows Boot (Set & Forget)
+To have the solar monitor start automatically whenever you turn on your PC:
+1. Press `Win + R`, type `shell:startup`, and hit **Enter**.
+2. Right-click inside the startup folder and choose **New > Shortcut**.
+3. Browse to and select `start_monitor.bat` in your project folder.
+4. Click **Next > Finish**. Now your monitoring server boots automatically on startup.
+
+---
+
+### 📱 Viewing from Phone or Tablet on Local Wi-Fi
+The dashboard is fully responsive. To view it from your phone, iPad, or another computer on the same home Wi-Fi:
+1. Find your PC's local IP address (e.g. run `ipconfig` in Command Prompt — typically `192.168.1.X`).
+2. Open your mobile browser and navigate to:
+   ```
+   http://192.168.1.X:8080
+   ```
+   *(Replace `192.168.1.X` with your PC's actual local IPv4 address).*
+
+---
+
+### ☀️ What to Expect at Sunrise & Sunset
+- **Daytime (Active):** Once the sun rises and solar panels energize the inverter, the Wi-Fi stick connects to your router and live 1 Hz SunSpec telemetry streams automatically.
+- **Nighttime (Deep Sleep):** The inverter turns off its display and de-energizes the Wi-Fi stick to avoid drawing grid power at night. The dashboard displays an honest standby status, continues serving historical graphs and APDCL analytics from SQLite, and **automatically reconnects at sunrise without needing a server restart**.
+
+---
+
+### 💻 (Optional) Frontend Development
+*Only required if you want to modify React UI components or styling:*
 ```bash
 cd frontend
 npm install
-npm run dev
-```
-Open **[http://localhost:3000](http://localhost:3000)**.
-
-To compile production assets into `static_dist/` (served directly by FastAPI):
-```bash
-npm run build
+npm run dev     # Starts Vite dev server with HMR at http://localhost:3000
+npm run build   # Compiles changes into ../static_dist/ served by FastAPI
 ```
 
 ---

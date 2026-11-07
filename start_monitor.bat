@@ -7,5 +7,6 @@ echo ======================================================================
 echo Starting Local Backend & WebSocket Gateway on port 8080...
 echo Dashboard is available at: http://localhost:8080
 echo.
+start http://localhost:8080
 python main.py
 pause
