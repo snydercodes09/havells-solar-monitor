@@ -14,7 +14,8 @@ import {
   HelpCircle,
   Zap,
   MapPin,
-  Save
+  Save,
+  Power
 } from 'lucide-react';
 
 export function SettingsSection({
@@ -28,6 +29,8 @@ export function SettingsSection({
   const [hasCtMeter, setHasCtMeter] = useState(false);
   const [meterModel, setMeterModel] = useState('None');
   const [meterSlaveId, setMeterSlaveId] = useState(2);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartMode, setAutostartMode] = useState('minimized');
   const [savedToast, setSavedToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -40,6 +43,8 @@ export function SettingsSection({
       setHasCtMeter(config.has_ct_meter === true || config.has_ct_meter === 'true');
       setMeterModel(config.meter_model || 'None');
       setMeterSlaveId(config.meter_slave_id !== undefined ? Number(config.meter_slave_id) : 2);
+      setAutostartEnabled(config.autostart?.enabled === true);
+      setAutostartMode(config.autostart?.mode || 'minimized');
     }
   }, [config]);
 
@@ -51,7 +56,9 @@ export function SettingsSection({
       selected_com_port: selectedPort || '',
       has_ct_meter: Boolean(hasCtMeter),
       meter_model: meterModel,
-      meter_slave_id: parseInt(meterSlaveId, 10) || 2
+      meter_slave_id: parseInt(meterSlaveId, 10) || 2,
+      autostart_enabled: Boolean(autostartEnabled),
+      autostart_mode: autostartMode
     });
     setIsSaving(false);
     setSavedToast(true);
@@ -371,6 +378,69 @@ export function SettingsSection({
                 <span className="id-label">Forest Tree Equivalency:</span>
                 <strong className="id-value text-emerald">1 Tree per 21.77 kg CO₂ Avoided</strong>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= CARD 5: WINDOWS AUTO-STARTUP ================= */}
+        <div className="solary-card settings-card">
+          <div className="card-header-row">
+            <div className="flex-align gap-10">
+              <div className="settings-icon-pill icon-emerald">
+                <Power size={20} className="text-emerald" />
+              </div>
+              <div>
+                <h3 className="card-heading">Windows Auto-Startup</h3>
+                <span className="card-sub-timestamp">Launch Service Automatically on PC Boot</span>
+              </div>
+            </div>
+            <span className={`status-pill ${autostartEnabled ? 'pill-live' : 'pill-sim'}`}>
+              {autostartEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+
+          <div className="settings-card-body">
+            <div className="form-group-custom">
+              <div className="toggle-container-box">
+                <div>
+                  <label className="settings-label" style={{ marginBottom: 2 }}>
+                    Auto-Start with Windows
+                  </label>
+                  <p className="settings-hint" style={{ marginBottom: 0 }}>
+                    {autostartEnabled
+                      ? 'Starts solar monitoring automatically whenever your computer powers on.'
+                      : 'Disabled: Launch manually via start_monitor.bat or terminal.'}
+                  </p>
+                </div>
+                <label className="custom-switch">
+                  <input
+                    type="checkbox"
+                    checked={autostartEnabled}
+                    onChange={(e) => setAutostartEnabled(e.target.checked)}
+                  />
+                  <span className="slider-round"></span>
+                </label>
+              </div>
+
+              {autostartEnabled && (
+                <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <label className="settings-label" style={{ fontSize: '12px' }}>
+                    Startup Behavior
+                  </label>
+                  <select
+                    className="settings-select-field font-mono"
+                    value={autostartMode}
+                    onChange={(e) => setAutostartMode(e.target.value)}
+                  >
+                    <option value="minimized">Minimized in Taskbar (Starts quietly without stealing focus)</option>
+                    <option value="silent">Silent Background (Runs completely invisible as background service)</option>
+                    <option value="standard">Standard Window (Opens command prompt + launches browser)</option>
+                  </select>
+                  <span className="field-note-text" style={{ marginTop: '8px', display: 'block' }}>
+                    Shortcut: %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HavellsSolarMonitor.lnk
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

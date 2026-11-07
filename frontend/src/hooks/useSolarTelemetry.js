@@ -76,7 +76,8 @@ export function useSolarTelemetry() {
     return {
       ...raw,
       has_ct_meter: raw.has_ct_meter === true || raw.has_ct_meter === 'true',
-      simulation_mode: raw.simulation_mode === true || raw.simulation_mode === 'true'
+      simulation_mode: raw.simulation_mode === true || raw.simulation_mode === 'true',
+      autostart: raw.autostart || { enabled: false, mode: 'disabled' }
     };
   };
 

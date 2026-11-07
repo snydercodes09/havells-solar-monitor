@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sliders, CheckCircle, Usb, IndianRupee, Cpu, Info, ShieldCheck, AlertCircle } from 'lucide-react';
+import { X, Sliders, CheckCircle, Usb, IndianRupee, Cpu, Info, ShieldCheck, AlertCircle, Power } from 'lucide-react';
 
 export function SettingsModal({
   isOpen = false,
@@ -17,6 +17,8 @@ export function SettingsModal({
   const [hasCtMeter, setHasCtMeter] = useState(false);
   const [meterModel, setMeterModel] = useState('None');
   const [meterSlaveId, setMeterSlaveId] = useState(2);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartMode, setAutostartMode] = useState('minimized');
   const [feedback, setFeedback] = useState({ tone: '', text: '' });
 
   // Synchronize local form state whenever modal opens or parent config updates
@@ -31,6 +33,8 @@ export function SettingsModal({
       setHasCtMeter(config.has_ct_meter === true || config.has_ct_meter === 'true');
       setMeterModel(config.meter_model || 'None');
       setMeterSlaveId(config.meter_slave_id !== undefined ? Number(config.meter_slave_id) : 2);
+      setAutostartEnabled(config.autostart?.enabled === true);
+      setAutostartMode(config.autostart?.mode || 'minimized');
       setFeedback({ tone: '', text: '' });
     }
   }, [config, isOpen]);
@@ -70,7 +74,9 @@ export function SettingsModal({
         rated_capacity_w: parsedCapacity,
         has_ct_meter: Boolean(hasCtMeter),
         meter_model: meterModel,
-        meter_slave_id: isNaN(parsedMeterSlave) ? 2 : parsedMeterSlave
+        meter_slave_id: isNaN(parsedMeterSlave) ? 2 : parsedMeterSlave,
+        autostart_enabled: Boolean(autostartEnabled),
+        autostart_mode: autostartMode
       };
       
       const res = await onSave(payload);
@@ -291,6 +297,48 @@ export function SettingsModal({
                     onChange={(e) => setMeterSlaveId(e.target.value)}
                   />
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Setting 5: Windows Auto-Startup on PC Boot */}
+          <div className="setting-field-card">
+            <div className="field-label-row">
+              <div className="flex-align gap-6">
+                <Power size={15} className="text-emerald" />
+                <label className="field-title">Windows Auto-Startup on PC Boot</label>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={autostartEnabled}
+                  onChange={(e) => setAutostartEnabled(e.target.checked)}
+                />
+                <span className="slider-round"></span>
+              </label>
+            </div>
+            <p className="field-desc">
+              {autostartEnabled ? (
+                <>Enabled: Havells Solar Monitor starts automatically whenever your Windows PC boots, collecting continuous solar telemetry.</>
+              ) : (
+                <>Disabled: Solar monitor starts manually via desktop shortcut or batch script.</>
+              )}
+            </p>
+
+            {autostartEnabled && (
+              <div style={{ marginTop: '12px' }}>
+                <label className="field-sublabel" style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                  Startup Window Mode
+                </label>
+                <select
+                  className="modal-select-input font-mono"
+                  value={autostartMode}
+                  onChange={(e) => setAutostartMode(e.target.value)}
+                >
+                  <option value="minimized">Minimized in Taskbar (Quiet startup - Recommended)</option>
+                  <option value="silent">Silent Background Service (Invisible window)</option>
+                  <option value="standard">Standard Window (Command window + open browser)</option>
+                </select>
               </div>
             )}
           </div>

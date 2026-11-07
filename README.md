@@ -81,12 +81,23 @@ Then open **[http://localhost:8080](http://localhost:8080)** in any browser.
 
 ---
 
-### Option 3: Auto-Start with Windows Boot (Set & Forget)
-To have the solar monitor start automatically whenever you turn on your PC:
-1. Press `Win + R`, type `shell:startup`, and hit **Enter**.
-2. Right-click inside the startup folder and choose **New > Shortcut**.
-3. Browse to and select `start_monitor.bat` in your project folder.
-4. Click **Next > Finish**. Now your monitoring server boots automatically on startup.
+### Option 3: Optional Auto-Start with Windows Boot (Set & Forget)
+You can configure the solar monitor to launch automatically in the background whenever your Windows PC powers on:
+
+#### Method A: From the Web Dashboard (Easiest)
+1. Open the dashboard at **[http://localhost:8080](http://localhost:8080)**.
+2. Go to the **Settings** tab (or click **Configure** in the top navigation).
+3. Under **Windows Auto-Startup**, toggle the switch to **Enabled**.
+4. Choose your preferred startup behavior:
+   - **Minimized in Taskbar (Recommended):** Boots quietly on your taskbar without stealing window focus.
+   - **Silent Background:** Runs completely invisible in the background as a local service.
+   - **Standard Window:** Opens command prompt and launches browser.
+5. Click **Save Configuration**.
+
+#### Method B: One-Click Desktop Scripts
+* **To Enable:** Double-click `enable_autostart.bat` in the project folder. Select your preferred mode (1, 2, or 3).
+* **To Disable:** Double-click `disable_autostart.bat` at any time to remove the startup shortcut.
+* **To Stop Running Background Server:** Double-click `stop_monitor.bat`.
 
 ---
 

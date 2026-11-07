@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 import serial.tools.list_ports
 
 import database
+import autostart_manager
 from modbus_reader import inverter_hub
 
 # Initialize database schema & seeding
@@ -164,7 +165,8 @@ async def get_config():
         "slave_id": int(database.get_config_value("slave_id", "1")),
         "has_ct_meter": database.get_config_value("has_ct_meter", "false") == "true",
         "meter_model": database.get_config_value("meter_model", "None"),
-        "meter_slave_id": int(database.get_config_value("meter_slave_id", "2"))
+        "meter_slave_id": int(database.get_config_value("meter_slave_id", "2")),
+        "autostart": autostart_manager.get_autostart_status()
     }
 
 @app.post("/api/config")
@@ -185,6 +187,10 @@ async def update_config(req: Request):
         database.set_config_value("meter_model", str(body["meter_model"]))
     if "meter_slave_id" in body:
         database.set_config_value("meter_slave_id", str(int(body["meter_slave_id"])))
+    if "autostart_enabled" in body:
+        enabled = bool(body["autostart_enabled"])
+        mode = str(body.get("autostart_mode", "minimized"))
+        autostart_manager.set_autostart(enabled, mode)
         
     com_port = body.get("selected_com_port", body.get("modbus_port", None))
     use_sim = body.get("simulation_mode", None)
@@ -196,6 +202,23 @@ async def update_config(req: Request):
         inverter_hub.set_mode(curr_sim, curr_port)
         
     return {"status": "ok", "config": await get_config()}
+
+@app.get("/api/autostart")
+async def get_autostart():
+    """Returns current Windows auto-startup configuration."""
+    return autostart_manager.get_autostart_status()
+
+@app.post("/api/autostart")
+async def configure_autostart(req: Request):
+    """Enables or disables Windows auto-startup with optional mode ('minimized' | 'silent' | 'standard')."""
+    body = await req.json()
+    enable = bool(body.get("enabled", True))
+    mode = str(body.get("mode", "minimized"))
+    success = autostart_manager.set_autostart(enable, mode)
+    return {
+        "status": "ok" if success else "error",
+        "autostart": autostart_manager.get_autostart_status()
+    }
 
 # --- APDCL METER SYNCHRONIZATION ENDPOINTS ---
 
